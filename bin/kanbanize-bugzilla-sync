@@ -3,6 +3,7 @@
 #PODNAME: kanbanize-bugzilla-sync
 
 use strict;
+use warnings;
 use Data::Dumper;
 
 use Net::Bugzilla::Kanbanize;
