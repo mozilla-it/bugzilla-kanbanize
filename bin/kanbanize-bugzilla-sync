@@ -78,9 +78,28 @@ sub get_bugs {
     my $data = decode_json( $res->decoded_content );
 
     my @bugs = map { $_->{id} } @{ $data->{bugs} };
+    my @marked = get_marked_bugs();
     my @cards = get_bugs_from_all_cards();
 
-    return uniq @bugs, @cards;
+    return uniq @bugs, @marked, @cards;
+}
+
+sub get_marked_bugs {
+    my $req =
+      HTTP::Request->new( GET =>
+"https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id&status_whiteboard_type=allwordssubstr&query_format=advanced&status_whiteboard=[kanban]");
+
+    my $res = $ua->request($req);
+
+    if ( !$res->is_success ) {
+        die Dumper($res);    #$res->status_line;
+    }
+
+    my $data = decode_json( $res->decoded_content );
+
+    my @bugs = map { $_->{id} } @{ $data->{bugs} };
+    
+    return @bugs; 
 }
 
 sub get_bugs_from_all_cards {
@@ -349,6 +368,10 @@ sub update_whiteboard {
     my $req =
       HTTP::Request->new(
         PUT => "https://bugzilla.mozilla.org/rest/bug/$bugid" );
+	
+    if ($whiteboard =~ m/\[kanban\]/) {
+      $whiteboard =~ s/\[kanban\]//;
+    }
 
     $whiteboard =
       "[kanban:https://kanbanize.com/ctrl_board/$BOARD_ID/$cardid] $whiteboard";
