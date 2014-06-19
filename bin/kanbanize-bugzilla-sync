@@ -1,7 +1,11 @@
 #!/usr/bin/env perl
 
+#PODNAME: kanbanize-bugzilla-sync
+
 use strict;
 use Data::Dumper;
+
+use Net::Bugzilla::Kanbanize;
 
 use LWP::Simple;
 use JSON;
@@ -13,12 +17,13 @@ use List::MoreUtils qw(uniq);
 
 use AppConfig;
 my $config = AppConfig->new(
- "verbose",
- "kanbanize_apikey=s",
- "kanbanize_boardid=i",
- "bugzilla_token=s",
-# "bugzilla_url=s", { DEFAULT => "https://bugzilla.mozilla.org" },
-# "kanbanize_url=s", { DEFAULT => "http://kanbanize.com" },
+    "verbose",
+    "kanbanize_apikey=s",
+    "kanbanize_boardid=i",
+    "bugzilla_token=s",
+
+    # "bugzilla_url=s", { DEFAULT => "https://bugzilla.mozilla.org" },
+    # "kanbanize_url=s", { DEFAULT => "http://kanbanize.com" },
 );
 
 $config->file("sync.cfg") if -r "sync.cfg";
@@ -26,9 +31,11 @@ $config->args();
 
 print Dumper($config) if $config->verbose;
 
-my $APIKEY   = $config->kanbanize_apikey or die "Please configure an apikey";
-my $BOARD_ID = $config->kanbanize_boardid or die "Please configure a kanbanize_boardid";
-my $BUGZILLA_TOKEN = $config->bugzilla_token or die "Please configure a bugzilla_token";
+my $APIKEY = $config->kanbanize_apikey or die "Please configure an apikey";
+my $BOARD_ID = $config->kanbanize_boardid
+  or die "Please configure a kanbanize_boardid";
+my $BUGZILLA_TOKEN = $config->bugzilla_token
+  or die "Please configure a bugzilla_token";
 
 my $ua = LWP::UserAgent->new();
 
@@ -69,7 +76,7 @@ sub get_bugs {
     }
 
     my $data = decode_json( $res->decoded_content );
-    
+
     my @bugs = map { $_->{id} } @{ $data->{bugs} };
     my @cards = get_bugs_from_all_cards();
 
@@ -90,22 +97,22 @@ sub get_bugs_from_all_cards {
     }
 
     my $cards = decode_json( $res->decoded_content );
-    
+
     my @bugs;
     foreach my $card (@$cards) {
-      my $extlink = $card->{extlink}; # XXX: Smarter parsing
-      if($extlink =~ /(\d+)$/) {
-         my $bugid=$1;
-	 push @bugs, $bugid; 
-      }
+        my $extlink = $card->{extlink};    # XXX: Smarter parsing
+        if ( $extlink =~ /(\d+)$/ ) {
+            my $bugid = $1;
+            push @bugs, $bugid;
+        }
     }
 
-	return @bugs;
+    return @bugs;
 }
 
 sub sync_bug {
     my $bugid = shift;
-    
+
     print STDERR "Bugid: $bugid\n";
 
     $total++;
@@ -172,7 +179,7 @@ sub sync_card {
     my $bug_assigned  = $bug->{assigned_to};
     my $card_assigned = $card->{assignee};
 
-    if ( defined $card_assigned
+    if (   defined $card_assigned
         && $card_assigned ne "None"
         && $bug_assigned =~ m/\@.*\.bugs$/ )
     {
@@ -183,8 +190,9 @@ sub sync_card {
         && $bug_assigned !~ m/\@.*\.bugs$/ )
     {
         warn "Update card assigned to $bug_assigned";
+
         #print STDERR
-         # "bug_asigned: $bug_assigned card_assigned: $card_assigned\n";
+        # "bug_asigned: $bug_assigned card_assigned: $card_assigned\n";
         update_card_assigned( $card, $bug_assigned );
     }
 
@@ -199,29 +207,29 @@ sub sync_card {
     # Check status
     my $bug_status  = $bug->{status};
     my $card_status = $card->{columnname};
-    
+
     # Close card on bug completion
 
-    if ($bug_status eq "RESOLVED" and $card_status ne "Done") {
-      complete_card($card);
+    if ( $bug_status eq "RESOLVED" and $card_status ne "Done" ) {
+        complete_card($card);
     }
-    
+
     # XXX: Should we close bug on card completion?
-    if ($bug_status ne "RESOLVED" and $card_status eq "Done") {
-       warn "Bug $bug->{id} is not RESOLVED but card says $card_status"; 
+    if ( $bug_status ne "RESOLVED" and $card_status eq "Done" ) {
+        warn "Bug $bug->{id} is not RESOLVED but card says $card_status";
     }
-    
+
     # Check extlink
     my $bug_link = "https://bugzilla.mozilla.org/show_bug.cgi?id=$bug->{id}";
-    
-    if ($card->{extlink} ne $bug_link) {
-      update_card_extlink($card, $bug_link);
+
+    if ( $card->{extlink} ne $bug_link ) {
+        update_card_extlink( $card, $bug_link );
     }
 }
 
 sub complete_card {
-  my $card = shift;
-    
+    my $card = shift;
+
     my $taskid = $card->{taskid};
 
     my $data = {
@@ -243,6 +251,7 @@ sub complete_card {
         die Dumper($res);    #$res->status_line;
     }
 }
+
 sub update_card_extlink {
     my ( $card, $extlink ) = @_;
 
@@ -381,19 +390,19 @@ sub create_card {
     my $card = decode_json( $res->decoded_content );
 
     $card->{taskid} = $card->{id};
-    
-    move_card($card, 'Pending Triage');
+
+    move_card( $card, 'Pending Triage' );
 
     return $card;
 }
 
 sub move_card {
-  my ($card, $lane) = @_;
+    my ( $card, $lane ) = @_;
 
     my $data = {
         boardid => $BOARD_ID,
         taskid  => $card->{taskid},
-	column  => 'Backlog',
+        column  => 'Backlog',
         lane    => $lane,
     };
 
@@ -409,12 +418,13 @@ sub move_card {
     if ( !$res->is_success ) {
         die Dumper($res);
     }
-  
+
 }
 
 sub get_bug_info {
     my $bugid = shift;
-    my $data  = get("https://bugzilla.mozilla.org/rest/bug/$bugid?token=$BUGZILLA_TOKEN");
+    my $data =
+      get("https://bugzilla.mozilla.org/rest/bug/$bugid?token=$BUGZILLA_TOKEN");
 
     if ( not $data ) {
         return;
