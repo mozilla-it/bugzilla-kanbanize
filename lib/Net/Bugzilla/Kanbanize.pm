@@ -5,6 +5,8 @@ package Net::Bugzilla::Kanbanize;
 
 #ABSTRACT: turns baubles into trinkets
 
+1;
+
 =head1 SYNOPSIS
 
 Kanbanize Bugzilla Sync Tool
@@ -17,4 +19,3 @@ This method does something experimental.
 
 This method returns a reason.
 
-1;
