@@ -59,8 +59,6 @@ else {
     %bugs = get_bugs();
 }
 
-print STDERR Dumper(\%bugs);
-
 my $count = scalar keys %bugs;
 
 print STDERR "Found a total of $count bugs\n";
@@ -68,7 +66,6 @@ print STDERR "Found a total of $count bugs\n";
 my $total = 0;
 
 while (my ($bugid, $bug) = each %bugs) {
-  warn "sync_bug($bugid)";
   sync_bug($bug);
 }
 
@@ -156,9 +153,7 @@ sub get_bugs_from_all_cards {
 sub sync_bug {
     my $bug = shift;
 
-    print STDERR "Bugid: $bug->{id}\n" if $config->verbose;
-    
-    die Dumper($bug) unless $bug->{id};
+#    print STDERR "Bugid: $bug->{id}\n" if $config->verbose;
 
     $total++;
 
@@ -166,12 +161,18 @@ sub sync_bug {
         print STDERR "[$total/$count] No info for bug $bug->{id}\n";
         return;
     }
+    
+    if ( $bug->{error} ) {
+        print STDERR "[$total/$count] No info for bug $bug->{id} (Private bug?)\n";
+	return;
+    }
 
     my $summary    = $bug->{summary};
     my $whiteboard = $bug->{whiteboard};
 
     my $card = parse_whiteboard($whiteboard);
 
+    my $status = "";
     if ( not defined $card ) {
         $card = create_card($bug);
 
@@ -181,15 +182,21 @@ sub sync_bug {
         }
 
         update_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
+	
+	$status .= "[card created]";
     }
 
     $card = retrieve_card( $card->{taskid} );
 
     my $cardid = $card->{taskid};
-    print STDERR "[$total/$count] Card $cardid - Bug $bug->{id} - $summary\n";
-
-    #sync_bugzilla($bug, $card);
-    sync_card( $card, $bug );
+    
+    if (sync_card( $card, $bug )) {
+      $status .= " [synced]";
+    }
+    
+    if ($status ne "" or $config->verbose) {
+        print STDERR "[$total/$count] Card $cardid - Bug $bug->{id} - $summary $status\n";
+    }
 }
 
 sub retrieve_card {
@@ -217,6 +224,8 @@ sub sync_bugzilla {
 
 sub sync_card {
     my ( $card, $bug ) = @_;
+    
+    my $updated;
 
     # Check Assignee
     my $bug_assigned  = $bug->{assigned_to};
@@ -228,6 +237,7 @@ sub sync_card {
     {
         warn "Update bug assigned to $card_assigned";
         update_bug_assigned( $bug, $card_assigned );
+	$updated++;
     }
     elsif ($bug_assigned !~ m[^$card_assigned@]
         && $bug_assigned !~ m/\@.*\.bugs$/ )
@@ -237,6 +247,7 @@ sub sync_card {
         #print STDERR
         # "bug_asigned: $bug_assigned card_assigned: $card_assigned\n";
         update_card_assigned( $card, $bug_assigned );
+	$updated++;
     }
 
     #Check summary (XXX: Formatting assumption here)
@@ -245,6 +256,7 @@ sub sync_card {
 
     if ( $bug_summary ne $card_summary ) {
         update_card_summary( $card, $bug_summary );
+	$updated++;
     }
 
     # Check status
@@ -253,13 +265,20 @@ sub sync_card {
 
     # Close card on bug completion
 
-    if ( $bug_status eq "RESOLVED" and $card_status ne "Done" ) {
+    if ( ( $bug_status eq "RESOLVED" or $bug_status eq "VERIFIED" ) and $card_status ne "Done" ) {
         complete_card($card);
+	$updated++;
     }
 
     # XXX: Should we close bug on card completion?
-    if ( $bug_status ne "RESOLVED" and $card_status eq "Done" ) {
-        warn "Bug $bug->{id} is not RESOLVED but card says $card_status";
+    if ( ( $bug_status ne "RESOLVED" and $bug_status ne "VERIFIED" ) and $card_status eq "Done" ) {
+        if ($bug_status eq "REOPENED") {
+	  reopen_card($card);
+	  $updated++;
+	}
+	else {
+          warn "Bug $bug->{id} is not RESOLVED ($bug_status) but card $card->{taskid} says $card_status";
+	}
     }
 
     # Check extlink
@@ -267,7 +286,18 @@ sub sync_card {
 
     if ( $card->{extlink} ne $bug_link ) {
         update_card_extlink( $card, $bug_link );
+	$updated++;
     }
+    
+    return $updated;
+}
+
+sub repoen_card {
+  my $card = shift;
+  
+  warn "[notimplemented] Should be reopening card $card->{taskid} and moving back to ready";
+  
+  return;
 }
 
 sub complete_card {
@@ -474,7 +504,7 @@ sub get_bug_info {
       get("https://bugzilla.mozilla.org/rest/bug/$bugid?token=$BUGZILLA_TOKEN");
 
     if ( not $data ) {
-        return;
+        return { id => $bugid, error => "No Data" };
     }
     
     print STDERR "Retrieving info for Bug $bugid from bugzilla\n" if $config->verbose;
