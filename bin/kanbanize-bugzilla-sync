@@ -414,7 +414,7 @@ sub create_card {
     my $bug = shift;
 
     my $data = {
-        'summary' => "$bug->{id} - $bug->{summary}",
+        'title' => "$bug->{id} - $bug->{summary}",
         'extlink' => "https://bugzilla.mozilla.org/show_bug.cgi?id=$bug->{id}",
         'boardid' => $BOARD_ID,
     };
