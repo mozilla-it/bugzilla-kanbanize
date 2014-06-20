@@ -34,8 +34,6 @@ my $config = AppConfig->new(
 $config->file("sync.cfg") if -r "sync.cfg";
 $config->args();
 
-print Dumper($config) if $config->verbose;
-
 my $APIKEY = $config->kanbanize_apikey or die "Please configure an apikey";
 my $BOARD_ID = $config->kanbanize_boardid
   or die "Please configure a kanbanize_boardid";
