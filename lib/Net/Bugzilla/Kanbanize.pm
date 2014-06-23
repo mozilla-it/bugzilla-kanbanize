@@ -13,6 +13,8 @@ use LWP::Simple;
 use JSON;
 
 use LWP::UserAgent;
+use File::HomeDir;
+
 use HTTP::Request;
 use URI::Escape;
 use List::MoreUtils qw(uniq);
@@ -106,6 +108,7 @@ sub get_bugs {
 
     foreach my $bugid (@cards) {
         if ( not exists $bugs{$bugid} ) {
+            warn "Adding bug $bugid from cards" if $config->verbose;
             $bugs{$bugid} = get_bug_info($bugid);
         }
     }
@@ -275,6 +278,8 @@ sub sync_card {
     my $card_status = $card->{columnname};
 
     # Close card on bug completion
+
+    warn "[$bug->{id}] bug: $bug_status card: $card_status" if $config->verbose;
 
     if ( ( $bug_status eq "RESOLVED" or $bug_status eq "VERIFIED" )
         and $card_status ne "Done" )
@@ -523,6 +528,7 @@ sub get_bug_info {
       get("https://bugzilla.mozilla.org/rest/bug/$bugid?token=$BUGZILLA_TOKEN");
 
     if ( not $data ) {
+        warn "Failed getting Bug info for Bug $bugid from bugzilla\n";
         return { id => $bugid, error => "No Data" };
     }
 
