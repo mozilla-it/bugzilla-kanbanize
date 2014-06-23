@@ -20,11 +20,11 @@ use List::MoreUtils qw(uniq);
 #XXX: https://bugzil.la/970457
 
 sub new {
-  my ($class, $config) = @_;
-  
-  my $self = bless { config => $config }, $class;
-  
-  return $self;
+    my ( $class, $config ) = @_;
+
+    my $self = bless { config => $config }, $class;
+
+    return $self;
 }
 
 #XXX: Wrong, need to be instance variables
@@ -39,41 +39,42 @@ my $count;
 my $config;
 
 sub run {
-  my $self = shift;
-  
-  $config = $self->{config};  
+    my $self = shift;
 
-  $APIKEY = $config->kanbanize_apikey or die "Please configure an apikey";
-  $BOARD_ID = $config->kanbanize_boardid or die "Please configure a kanbanize_boardid";
-  $BUGZILLA_TOKEN = $config->bugzilla_token or die "Please configure a bugzilla_token";
-  
+    $config = $self->{config};
 
-  $ua->timeout(15);
-  $ua->env_proxy;
-  $ua->default_header( 'apikey' => $APIKEY );
+    $APIKEY = $config->kanbanize_apikey or die "Please configure an apikey";
+    $BOARD_ID = $config->kanbanize_boardid
+      or die "Please configure a kanbanize_boardid";
+    $BUGZILLA_TOKEN = $config->bugzilla_token
+      or die "Please configure a bugzilla_token";
 
-  my %bugs;
+    $ua->timeout(15);
+    $ua->env_proxy;
+    $ua->default_header( 'apikey' => $APIKEY );
 
-  if (@ARGV) {
-      foreach my $bug (@ARGV) {
-        $bugs{$bug} = get_bug_info($bug);
-      }
-  }
-  else {
-    %bugs = get_bugs();
-  }
+    my %bugs;
 
-  $count = scalar keys %bugs;
+    if (@ARGV) {
+        foreach my $bug (@ARGV) {
+            $bugs{$bug} = get_bug_info($bug);
+        }
+    }
+    else {
+        %bugs = get_bugs();
+    }
 
-  print STDERR "Found a total of $count bugs\n";
-  
-  $total = 0;
+    $count = scalar keys %bugs;
 
-  while (my ($bugid, $bug) = each %bugs) {
-    sync_bug($bug);
-  }
+    print STDERR "Found a total of $count bugs\n";
 
-  return 1;
+    $total = 0;
+
+    while ( my ( $bugid, $bug ) = each %bugs ) {
+        sync_bug($bug);
+    }
+
+    return 1;
 }
 
 sub get_bugs {
@@ -89,24 +90,24 @@ sub get_bugs {
     }
 
     my $data = decode_json( $res->decoded_content );
-    
+
     my %bugs;
 
     foreach my $bug ( @{ $data->{bugs} } ) {
-      $bugs{$bug->{id}} = $bug;
+        $bugs{ $bug->{id} } = $bug;
     }
-    
+
     my @marked = get_marked_bugs();
-    foreach my $bug ( @marked ) {
-      $bugs{$bug->{id}} = $bug;
-    }    
-    
+    foreach my $bug (@marked) {
+        $bugs{ $bug->{id} } = $bug;
+    }
+
     my @cards = get_bugs_from_all_cards();
 
-    foreach my $bugid ( @cards ) {
-      if (not exists $bugs{$bugid}) {
-	$bugs{$bugid} = get_bug_info($bugid);
-      }
+    foreach my $bugid (@cards) {
+        if ( not exists $bugs{$bugid} ) {
+            $bugs{$bugid} = get_bug_info($bugid);
+        }
     }
 
     return %bugs;
@@ -115,7 +116,8 @@ sub get_bugs {
 sub get_marked_bugs {
     my $req =
       HTTP::Request->new( GET =>
-"https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&status_whiteboard_type=allwordssubstr&query_format=advanced&status_whiteboard=[kanban]");
+"https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&status_whiteboard_type=allwordssubstr&query_format=advanced&status_whiteboard=[kanban]"
+      );
 
     my $res = $ua->request($req);
 
@@ -124,10 +126,10 @@ sub get_marked_bugs {
     }
 
     my $data = decode_json( $res->decoded_content );
-    
+
     my @bugs = @{ $data->{bugs} };
-    
-    return @bugs; 
+
+    return @bugs;
 }
 
 sub get_bugs_from_all_cards {
@@ -160,7 +162,7 @@ sub get_bugs_from_all_cards {
 sub sync_bug {
     my $bug = shift;
 
-#    print STDERR "Bugid: $bug->{id}\n" if $config->verbose;
+    #    print STDERR "Bugid: $bug->{id}\n" if $config->verbose;
 
     $total++;
 
@@ -168,10 +170,11 @@ sub sync_bug {
         print STDERR "[$total/$count] No info for bug $bug->{id}\n";
         return;
     }
-    
+
     if ( $bug->{error} ) {
-        print STDERR "[$total/$count] No info for bug $bug->{id} (Private bug?)\n";
-	return;
+        print STDERR
+          "[$total/$count] No info for bug $bug->{id} (Private bug?)\n";
+        return;
     }
 
     my $summary    = $bug->{summary};
@@ -189,20 +192,21 @@ sub sync_bug {
         }
 
         update_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
-	
-	$status .= "[card created]";
+
+        $status .= "[card created]";
     }
 
     $card = retrieve_card( $card->{taskid} );
 
     my $cardid = $card->{taskid};
-    
-    if (sync_card( $card, $bug )) {
-      $status .= " [synced]";
+
+    if ( sync_card( $card, $bug ) ) {
+        $status .= " [synced]";
     }
-    
-    if ($status ne "" or $config->verbose) {
-        print STDERR "[$total/$count] Card $cardid - Bug $bug->{id} - $summary $status\n";
+
+    if ( $status ne "" or $config->verbose ) {
+        print STDERR
+          "[$total/$count] Card $cardid - Bug $bug->{id} - $summary $status\n";
     }
 }
 
@@ -231,7 +235,7 @@ sub sync_bugzilla {
 
 sub sync_card {
     my ( $card, $bug ) = @_;
-    
+
     my $updated;
 
     # Check Assignee
@@ -244,7 +248,7 @@ sub sync_card {
     {
         warn "Update bug $bug->{id} assigned to $card_assigned";
         update_bug_assigned( $bug, $card_assigned );
-	$updated++;
+        $updated++;
     }
     elsif ($bug_assigned !~ m[^$card_assigned@]
         && $bug_assigned !~ m/\@.*\.bugs$/ )
@@ -254,7 +258,7 @@ sub sync_card {
         #print STDERR
         # "bug_asigned: $bug_assigned card_assigned: $card_assigned\n";
         update_card_assigned( $card, $bug_assigned );
-	$updated++;
+        $updated++;
     }
 
     #Check summary (XXX: Formatting assumption here)
@@ -263,7 +267,7 @@ sub sync_card {
 
     if ( $bug_summary ne $card_summary ) {
         update_card_summary( $card, $bug_summary );
-	$updated++;
+        $updated++;
     }
 
     # Check status
@@ -272,20 +276,26 @@ sub sync_card {
 
     # Close card on bug completion
 
-    if ( ( $bug_status eq "RESOLVED" or $bug_status eq "VERIFIED" ) and $card_status ne "Done" ) {
+    if ( ( $bug_status eq "RESOLVED" or $bug_status eq "VERIFIED" )
+        and $card_status ne "Done" )
+    {
         complete_card($card);
-	$updated++;
+        $updated++;
     }
 
     # XXX: Should we close bug on card completion?
-    if ( ( $bug_status ne "RESOLVED" and $bug_status ne "VERIFIED" ) and $card_status eq "Done" ) {
-        if ($bug_status eq "REOPENED") {
-	  reopen_card($card);
-	  #$updated++;
-	}
-	else {
-          warn "Bug $bug->{id} is not RESOLVED ($bug_status) but card $card->{taskid} says $card_status";
-	}
+    if ( ( $bug_status ne "RESOLVED" and $bug_status ne "VERIFIED" )
+        and $card_status eq "Done" )
+    {
+        if ( $bug_status eq "REOPENED" ) {
+            reopen_card($card);
+
+            #$updated++;
+        }
+        else {
+            warn
+"Bug $bug->{id} is not RESOLVED ($bug_status) but card $card->{taskid} says $card_status";
+        }
     }
 
     # Check extlink
@@ -293,18 +303,19 @@ sub sync_card {
 
     if ( $card->{extlink} ne $bug_link ) {
         update_card_extlink( $card, $bug_link );
-	$updated++;
+        $updated++;
     }
-    
+
     return $updated;
 }
 
 sub reopen_card {
-  my $card = shift;
-  
-  warn "[notimplemented] Should be reopening card $card->{taskid} and moving back to ready";
-  
-  return;
+    my $card = shift;
+
+    warn
+"[notimplemented] Should be reopening card $card->{taskid} and moving back to ready";
+
+    return;
 }
 
 sub complete_card {
@@ -429,9 +440,9 @@ sub update_whiteboard {
     my $req =
       HTTP::Request->new(
         PUT => "https://bugzilla.mozilla.org/rest/bug/$bugid" );
-	
-    if ($whiteboard =~ m/\[kanban\]/) {
-      $whiteboard =~ s/\[kanban\]//;
+
+    if ( $whiteboard =~ m/\[kanban\]/ ) {
+        $whiteboard =~ s/\[kanban\]//;
     }
 
     $whiteboard =
@@ -452,7 +463,7 @@ sub create_card {
     my $bug = shift;
 
     my $data = {
-        'title' => "$bug->{id} - $bug->{summary}",
+        'title'   => "$bug->{id} - $bug->{summary}",
         'extlink' => "https://bugzilla.mozilla.org/show_bug.cgi?id=$bug->{id}",
         'boardid' => $BOARD_ID,
     };
@@ -514,8 +525,9 @@ sub get_bug_info {
     if ( not $data ) {
         return { id => $bugid, error => "No Data" };
     }
-    
-    print STDERR "Retrieving info for Bug $bugid from bugzilla\n" if $config->verbose;
+
+    print STDERR "Retrieving info for Bug $bugid from bugzilla\n"
+      if $config->verbose;
 
     $data = decode_json($data);
 
@@ -538,7 +550,6 @@ sub parse_whiteboard {
 
     return $card;
 }
-
 
 1;
 
