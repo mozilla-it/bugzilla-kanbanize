@@ -31,6 +31,8 @@ my $config = AppConfig->new(
     # "kanbanize_url=s", { DEFAULT => "http://kanbanize.com" },
 );
 
+#XXX: https://bugzil.la/970457
+
 $config->file("sync.cfg") if -r "sync.cfg";
 $config->args();
 
@@ -235,7 +237,7 @@ sub sync_card {
         && $card_assigned ne "None"
         && $bug_assigned =~ m/\@.*\.bugs$/ )
     {
-        warn "Update bug assigned to $card_assigned";
+        warn "Update bug $bug->{id} assigned to $card_assigned";
         update_bug_assigned( $bug, $card_assigned );
 	$updated++;
     }
@@ -274,7 +276,7 @@ sub sync_card {
     if ( ( $bug_status ne "RESOLVED" and $bug_status ne "VERIFIED" ) and $card_status eq "Done" ) {
         if ($bug_status eq "REOPENED") {
 	  reopen_card($card);
-	  $updated++;
+	  #$updated++;
 	}
 	else {
           warn "Bug $bug->{id} is not RESOLVED ($bug_status) but card $card->{taskid} says $card_status";
@@ -292,7 +294,7 @@ sub sync_card {
     return $updated;
 }
 
-sub repoen_card {
+sub reopen_card {
   my $card = shift;
   
   warn "[notimplemented] Should be reopening card $card->{taskid} and moving back to ready";
