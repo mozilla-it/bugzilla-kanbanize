@@ -237,13 +237,13 @@ sub sync_bug {
     }
 
     if ( $status ne "" or $config->verbose ) {
-        print STDERR
-          "[$total/$count] Card $cardid - Bug $bug->{id} - $summary $status\n";
+        printf STDERR
+          "[%4d/%4d] Card %4d - Bug %8d - $summary $status\n", $total, $count, $cardid, $bug->{id};
     }
     
-    if (@changes && $config->verbose) {
+    if (@changes) {
       foreach my $change (@changes) {
-        print STDERR "[$total/$count] ** Card $cardid - Bug $bug->{id} - $summary $change\n";
+        printf STDERR "[%4d/%4d] Card %4d - Bug %8d - $summary ** %s **\n", $total, $count, $cardid, $bug->{id}, $change;
       }
     }
 }
