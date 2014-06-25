@@ -58,9 +58,7 @@ sub run {
     my %bugs;
 
     if (@ARGV) {
-        foreach my $bug (@ARGV) {
-            $bugs{$bug} = get_bug_info($bug);
-        }
+        fill_missing_bugs_info(\%bugs, @ARGV);
     }
     else {
         %bugs = get_bugs();
@@ -105,15 +103,45 @@ sub get_bugs {
     }
 
     my @cards = get_bugs_from_all_cards();
-
-    foreach my $bugid (@cards) {
-        if ( not exists $bugs{$bugid} ) {
-            warn "Adding bug $bugid from cards" if $config->verbose;
-            $bugs{$bugid} = get_bug_info($bugid);
-        }
-    }
+    
+    fill_missing_bugs_info(\%bugs, @cards);
 
     return %bugs;
+}
+
+sub fill_missing_bugs_info {
+  my ($bugs, @bugs) = @_;
+  
+  my @missing_bugs;
+  
+  foreach my $bugid (@bugs) {
+    if ( not exists $bugs->{$bugid} ) {
+      push @missing_bugs, $bugid;
+    }
+  }
+  
+  my $missing_bugs_ids = join ",", sort @bugs;
+  
+  my $req = 
+    HTTP::Request->new( GET =>
+"https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&id=$missing_bugs_ids"
+      );
+
+    my $res = $ua->request($req);
+
+    if ( !$res->is_success ) {
+        die Dumper($res);    #$res->status_line;
+    }
+
+    my $data = decode_json( $res->decoded_content );
+
+    my @found_bugs = @{ $data->{bugs} };
+  
+    foreach my $bug (sort @found_bugs) {
+      $bugs->{$bug->{id}} = $bug;
+    }
+  
+    return;
 }
 
 sub get_marked_bugs {
@@ -203,13 +231,20 @@ sub sync_bug {
 
     my $cardid = $card->{taskid};
 
-    if ( sync_card( $card, $bug ) ) {
-        $status .= " [synced]";
+    my @changes = sync_card( $card, $bug );
+    if (@changes) {
+      $status .= " [synced]";
     }
 
     if ( $status ne "" or $config->verbose ) {
         print STDERR
           "[$total/$count] Card $cardid - Bug $bug->{id} - $summary $status\n";
+    }
+    
+    if (@changes && $config->verbose) {
+      foreach my $change (@changes) {
+        print STDERR "[$total/$count] ** Card $cardid - Bug $bug->{id} - $summary $change\n";
+      }
     }
 }
 
@@ -239,7 +274,7 @@ sub sync_bugzilla {
 sub sync_card {
     my ( $card, $bug ) = @_;
 
-    my $updated;
+    my @updated;
 
     # Check Assignee
     my $bug_assigned  = $bug->{assigned_to};
@@ -249,19 +284,17 @@ sub sync_card {
         && $card_assigned ne "None"
         && $bug_assigned =~ m/\@.*\.bugs$/ )
     {
-        warn "Update bug $bug->{id} assigned to $card_assigned";
+        push @updated, "Update bug $bug->{id} assigned to $card_assigned";
         update_bug_assigned( $bug, $card_assigned );
-        $updated++;
     }
     elsif ($bug_assigned !~ m[^$card_assigned@]
         && $bug_assigned !~ m/\@.*\.bugs$/ )
     {
-        warn "Update card assigned to $bug_assigned";
+        push @updated, "Update card assigned to $bug_assigned";
 
         #print STDERR
         # "bug_asigned: $bug_assigned card_assigned: $card_assigned\n";
         update_card_assigned( $card, $bug_assigned );
-        $updated++;
     }
 
     #Check summary (XXX: Formatting assumption here)
@@ -270,7 +303,7 @@ sub sync_card {
 
     if ( $bug_summary ne $card_summary ) {
         update_card_summary( $card, $bug_summary );
-        $updated++;
+        push @updated, "Updated card summary";
     }
 
     # Check status
@@ -279,13 +312,13 @@ sub sync_card {
 
     # Close card on bug completion
 
-    warn "[$bug->{id}] bug: $bug_status card: $card_status" if $config->verbose;
+    #warn "[$bug->{id}] bug: $bug_status card: $card_status" if $config->verbose;
 
     if ( ( $bug_status eq "RESOLVED" or $bug_status eq "VERIFIED" )
         and $card_status ne "Done" )
     {
         complete_card($card);
-        $updated++;
+        push @updated, "Card completed";
     }
 
     # XXX: Should we close bug on card completion?
@@ -294,7 +327,6 @@ sub sync_card {
     {
         if ( $bug_status eq "REOPENED" ) {
             reopen_card($card);
-
             #$updated++;
         }
         else {
@@ -308,10 +340,10 @@ sub sync_card {
 
     if ( $card->{extlink} ne $bug_link ) {
         update_card_extlink( $card, $bug_link );
-        $updated++;
+        push @updated, "Updated external link to bugzilla";
     }
 
-    return $updated;
+    return @updated;
 }
 
 sub reopen_card {
