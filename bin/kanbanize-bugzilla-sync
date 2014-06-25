@@ -13,6 +13,7 @@ use Net::Bugzilla::Kanbanize;
 use AppConfig;
 my $config = AppConfig->new(
     "verbose",
+    "version",
     "kanbanize_apikey=s",
     "kanbanize_boardid=i",
     "bugzilla_token=s",
@@ -25,5 +26,9 @@ $config->file("sync.cfg") if -r "sync.cfg";
 $config->args();
 
 my $app = Net::Bugzilla::Kanbanize->new($config);
+
+if ($config->version) {
+  exit $app->version();
+}
 
 exit $app->run();

@@ -3,6 +3,8 @@ use warnings;
 
 package Net::Bugzilla::Kanbanize;
 
+our $VERSION;
+
 #ABSTRACT: Bugzilla and Kanbanize sync tool
 
 use Data::Dumper;
@@ -27,6 +29,10 @@ sub new {
     my $self = bless { config => $config }, $class;
 
     return $self;
+}
+
+sub version {
+  print STDERR "Version $VERSION\n";
 }
 
 #XXX: Wrong, need to be instance variables
