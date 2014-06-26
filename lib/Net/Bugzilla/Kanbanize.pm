@@ -31,6 +31,13 @@ sub new {
     return $self;
 }
 
+
+=head2 version
+
+prints current version to STDERR
+
+=cut
+
 sub version {
   print STDERR "Version $VERSION\n";
 }
@@ -601,11 +608,13 @@ sub parse_whiteboard {
 
 Kanbanize Bugzilla Sync Tool
 
-=method new
+=head1 METHODS
+
+=head2 new
 
 This method does something experimental.
 
-=method bar
+=head2 version
 
 This method returns a reason.
 
