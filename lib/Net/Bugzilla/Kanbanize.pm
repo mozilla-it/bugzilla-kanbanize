@@ -176,6 +176,9 @@ sub get_marked_bugs {
     return @bugs;
 }
 
+
+my $all_cards;
+
 sub get_bugs_from_all_cards {
 
     my $req =
@@ -188,11 +191,13 @@ sub get_bugs_from_all_cards {
     if ( !$res->is_success ) {
         die Dumper($res);    #$res->status_line;
     }
-
+    
     my $cards = decode_json( $res->decoded_content );
 
     my @bugs;
     foreach my $card (@$cards) {
+        $all_cards->{$card->{taskid}} = $card;
+    
         my $extlink = $card->{extlink};    # XXX: Smarter parsing
         if ( $extlink =~ /(\d+)$/ ) {
             my $bugid = $1;
@@ -263,6 +268,10 @@ sub sync_bug {
 
 sub retrieve_card {
     my $card_id = shift;
+    
+    if (exists $all_cards->{$card_id}) {
+      return $all_cards->{$card_id};
+    }
 
     my $req =
       HTTP::Request->new( POST =>
@@ -275,9 +284,9 @@ sub retrieve_card {
         die Dumper($res);    #$res->status_line;
     }
 
-    my $card = decode_json( $res->decoded_content );
+    $all_cards->{$card_id} = decode_json( $res->decoded_content );
 
-    return $card;
+    return $all_cards->{$card_id};
 }
 
 sub sync_bugzilla {
