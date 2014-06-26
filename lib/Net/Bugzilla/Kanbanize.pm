@@ -241,7 +241,7 @@ sub sync_bug {
         }
 
         update_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
-
+fdfd
         $status .= "[card created]";
     }
 
@@ -250,13 +250,10 @@ sub sync_bug {
     my $cardid = $card->{taskid};
 
     my @changes = sync_card( $card, $bug );
-    if (@changes) {
-      $status .= " [synced]";
-    }
 
-    if ( $status ne "" or $config->verbose ) {
+    if ( $config->verbose ) {
         printf STDERR
-          "[%4d/%4d] Card %4d - Bug %8d - $summary $status\n", $total, $count, $cardid, $bug->{id};
+          "[%4d/%4d] Card %4d - Bug %8d - $summary\n", $total, $count, $cardid, $bug->{id};
     }
     
     if (@changes) {
