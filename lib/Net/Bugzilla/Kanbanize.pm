@@ -250,15 +250,17 @@ sub sync_bug {
     my $cardid = $card->{taskid};
 
     push @changes, sync_card( $card, $bug );
+    
+    my $tstamp = localtime();
 
     if ( $config->verbose ) {
         printf STDERR
-          "[%4d/%4d] Card %4d - Bug %8d - $summary\n", $total, $count, $cardid, $bug->{id};
+          "[$tstamp][%4d/%4d] Card %4d - Bug %8d - $summary\n", $total, $count, $cardid, $bug->{id};
     }
     
     if (@changes) {
       foreach my $change (@changes) {
-        printf STDERR "[%4d/%4d] Card %4d - Bug %8d - $summary ** %s **\n", $total, $count, $cardid, $bug->{id}, $change;
+        printf STDERR "[$tstamp][%4d/%4d] Card %4d - Bug %8d - $summary ** %s **\n", $total, $count, $cardid, $bug->{id}, $change;
       }
     }
 }
