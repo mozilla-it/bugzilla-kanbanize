@@ -79,7 +79,7 @@ sub run {
 
     $count = scalar keys %bugs;
 
-    print STDERR "Found a total of $count bugs\n";
+    print STDERR "Found a total of $count bugs\n" if $config->verbose;
 
     $total = 0;
 
