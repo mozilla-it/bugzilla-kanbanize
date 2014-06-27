@@ -231,7 +231,7 @@ sub sync_bug {
 
     my $card = parse_whiteboard($whiteboard);
 
-    my $status = "";
+    my @changes;
     if ( not defined $card ) {
         $card = create_card($bug);
 
@@ -241,15 +241,15 @@ sub sync_bug {
         }
 
         update_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
-fdfd
-        $status .= "[card created]";
+
+        push @changes, "[card created]";
     }
 
     $card = retrieve_card( $card->{taskid} );
 
     my $cardid = $card->{taskid};
 
-    my @changes = sync_card( $card, $bug );
+    push @changes, sync_card( $card, $bug );
 
     if ( $config->verbose ) {
         printf STDERR
