@@ -158,6 +158,28 @@ sub fill_missing_bugs_info {
     return;
 }
 
+# Also retrieve bugs we are cc'ed on.
+sub get_cced_bugs {
+    my $email = $config->bugzilla_id;
+    
+    my $req =
+      HTTP::Request->new( GET =>
+"https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&bug_status=UNCONFIRMED&bug_status=NEW&bug_status=ASSIGNED&bug_status=REOPENED&emailcc1=1&emailtype1=exact&email1=$email"
+      );
+
+    my $res = $ua->request($req);
+
+    if ( !$res->is_success ) {
+        die Dumper($res);    #$res->status_line;
+    }
+
+    my $data = decode_json( $res->decoded_content );
+
+    my @bugs = @{ $data->{bugs} };
+
+    return @bugs;
+}
+
 sub get_marked_bugs {
     my $req =
       HTTP::Request->new( GET =>
@@ -245,9 +267,10 @@ sub sync_bug {
 
         push @changes, "[card created]";
     }
-    else {
-        $card = retrieve_card( $card->{taskid} );
-	
+    
+    $card = retrieve_card( $card->{taskid} );
+    
+    if not ($card) {
 	# Referenced card missing
 	if (not $card) {
 	    warn "Card $card->{taskid} referenced in bug $bug->{id} missing, clearing kanban whiteboard";
