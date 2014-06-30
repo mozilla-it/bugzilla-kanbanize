@@ -31,7 +31,6 @@ sub new {
     return $self;
 }
 
-
 =head2 version
 
 prints current version to STDERR
@@ -39,7 +38,7 @@ prints current version to STDERR
 =cut
 
 sub version {
-  return $VERSION || "git";
+    return $VERSION || "git";
 }
 
 #XXX: Wrong, need to be instance variables
@@ -71,7 +70,7 @@ sub run {
     my %bugs;
 
     if (@ARGV) {
-        fill_missing_bugs_info(\%bugs, @ARGV);
+        fill_missing_bugs_info( \%bugs, @ARGV );
     }
     else {
         %bugs = get_bugs();
@@ -111,33 +110,33 @@ sub get_bugs {
     }
 
     my @marked = get_marked_bugs();
-    
+
     foreach my $bug (@marked) {
         $bugs{ $bug->{id} } = $bug;
     }
 
     my @cards = get_bugs_from_all_cards();
-    
-    fill_missing_bugs_info(\%bugs, @cards);
+
+    fill_missing_bugs_info( \%bugs, @cards );
 
     return %bugs;
 }
 
 sub fill_missing_bugs_info {
-  my ($bugs, @bugs) = @_;
-  
-  my @missing_bugs;
-  
-  foreach my $bugid (@bugs) {
-    if ( not exists $bugs->{$bugid} ) {
-      push @missing_bugs, $bugid;
+    my ( $bugs, @bugs ) = @_;
+
+    my @missing_bugs;
+
+    foreach my $bugid (@bugs) {
+        if ( not exists $bugs->{$bugid} ) {
+            push @missing_bugs, $bugid;
+        }
     }
-  }
-  
-  my $missing_bugs_ids = join ",", sort @bugs;
-  
-  my $req = 
-    HTTP::Request->new( GET =>
+
+    my $missing_bugs_ids = join ",", sort @bugs;
+
+    my $req =
+      HTTP::Request->new( GET =>
 "https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&id=$missing_bugs_ids"
       );
 
@@ -150,18 +149,18 @@ sub fill_missing_bugs_info {
     my $data = decode_json( $res->decoded_content );
 
     my @found_bugs = @{ $data->{bugs} };
-  
-    foreach my $bug (sort @found_bugs) {
-      $bugs->{$bug->{id}} = $bug;
+
+    foreach my $bug ( sort @found_bugs ) {
+        $bugs->{ $bug->{id} } = $bug;
     }
-  
+
     return;
 }
 
 # Also retrieve bugs we are cc'ed on.
 sub get_cced_bugs {
     my $email = $config->bugzilla_id;
-    
+
     my $req =
       HTTP::Request->new( GET =>
 "https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&bug_status=UNCONFIRMED&bug_status=NEW&bug_status=ASSIGNED&bug_status=REOPENED&emailcc1=1&emailtype1=exact&email1=$email"
@@ -199,7 +198,6 @@ sub get_marked_bugs {
     return @bugs;
 }
 
-
 my $all_cards;
 
 sub get_bugs_from_all_cards {
@@ -214,13 +212,13 @@ sub get_bugs_from_all_cards {
     if ( !$res->is_success ) {
         die Dumper($res);    #$res->status_line;
     }
-    
+
     my $cards = decode_json( $res->decoded_content );
 
     my @bugs;
     foreach my $card (@$cards) {
-        $all_cards->{$card->{taskid}} = $card;
-    
+        $all_cards->{ $card->{taskid} } = $card;
+
         my $extlink = $card->{extlink};    # XXX: Smarter parsing
         if ( $extlink =~ /(\d+)$/ ) {
             my $bugid = $1;
@@ -267,43 +265,47 @@ sub sync_bug {
 
         push @changes, "[card created]";
     }
-    
-    $card = retrieve_card( $card->{taskid} );
-    
-    if not ($card) {
-	# Referenced card missing
-	if (not $card) {
-	    warn "Card $card->{taskid} referenced in bug $bug->{id} missing, clearing kanban whiteboard";
-	    clear_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
-	    return;
-	}
-    }
 
-    my $cardid = $card->{taskid};
+    $card = retrieve_card( $card->{taskid} );
+
+    if not($card) {
+
+        # Referenced card missing
+        if ( not $card ) {
+            warn
+"Card $card->{taskid} referenced in bug $bug->{id} missing, clearing kanban whiteboard";
+            clear_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
+            return;
+        }
+      }
+
+      my $cardid = $card->{taskid};
 
     push @changes, sync_card( $card, $bug );
-    
+
     my $tstamp = localtime();
 
     if ( $config->verbose ) {
-        printf STDERR
-          "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - $summary\n", $total, $count, $cardid, $bug->{id};
+        printf STDERR "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - $summary\n",
+          $total, $count, $cardid, $bug->{id};
     }
-    
+
     if (@changes) {
-      foreach my $change (@changes) {
-        printf STDERR "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - $summary ** %s **\n", $total, $count, $cardid, $bug->{id}, $change;
-      }
+        foreach my $change (@changes) {
+            printf STDERR
+              "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - $summary ** %s **\n",
+              $total, $count, $cardid, $bug->{id}, $change;
+        }
     }
 }
 
 sub retrieve_card {
     my $card_id = shift;
-    
-    if (exists $all_cards->{$card_id}) {
-      return $all_cards->{$card_id};
+
+    if ( exists $all_cards->{$card_id} ) {
+        return $all_cards->{$card_id};
     }
-    
+
     warn "Retrieving info for single card $card_id\n";
 
     my $req =
@@ -312,14 +314,14 @@ sub retrieve_card {
       );
 
     my $res = $ua->request($req);
-    
+
     my $data = decode_json( $res->decoded_content );
 
     if ( !$res->is_success ) {
-        if ($data->{Error} eq 'No such task or board.') {
-	    return;
-	}
-        die Dumper($data, $res);    #$res->status_line;
+        if ( $data->{Error} eq 'No such task or board.' ) {
+            return;
+        }
+        die Dumper( $data, $res );    #$res->status_line;
     }
 
     $all_cards->{$card_id} = $data;
@@ -339,9 +341,9 @@ sub sync_card {
     # Check Assignee
     my $bug_assigned  = $bug->{assigned_to};
     my $card_assigned = $card->{assignee};
-    
-    if (not defined $card_assigned) {
-      die Dumper($bug, $card);
+
+    if ( not defined $card_assigned ) {
+        die Dumper( $bug, $card );
     }
 
     if (   defined $card_assigned
@@ -376,7 +378,7 @@ sub sync_card {
 
     # Close card on bug completion
 
-    #warn "[$bug->{id}] bug: $bug_status card: $card_status" if $config->verbose;
+   #warn "[$bug->{id}] bug: $bug_status card: $card_status" if $config->verbose;
 
     if ( ( $bug_status eq "RESOLVED" or $bug_status eq "VERIFIED" )
         and $card_status ne "Done" )
@@ -391,6 +393,7 @@ sub sync_card {
     {
         if ( $bug_status eq "REOPENED" ) {
             reopen_card($card);
+
             #$updated++;
         }
         else {
