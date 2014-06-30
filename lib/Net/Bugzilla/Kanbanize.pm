@@ -39,7 +39,7 @@ prints current version to STDERR
 =cut
 
 sub version {
-  print STDERR "Version $VERSION\n";
+  return $VERSION || "git";
 }
 
 #XXX: Wrong, need to be instance variables

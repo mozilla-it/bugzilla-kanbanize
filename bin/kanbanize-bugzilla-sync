@@ -28,7 +28,9 @@ $config->args();
 my $app = Net::Bugzilla::Kanbanize->new($config);
 
 if ($config->version) {
-  exit $app->version();
+  my $version = $app->version();
+  print STDERR "$0: $version\n";
+  exit;
 }
 
 exit $app->run();
