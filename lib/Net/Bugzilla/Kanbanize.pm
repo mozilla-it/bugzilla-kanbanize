@@ -268,18 +268,15 @@ sub sync_bug {
 
     $card = retrieve_card( $card->{taskid} );
 
-    if not($card) {
+    # Referenced card missing
+    if ( not $card ) {
+      warn
+    "Card $card->{taskid} referenced in bug $bug->{id} missing, clearing kanban whiteboard";
+      clear_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
+      return;
+    }
 
-        # Referenced card missing
-        if ( not $card ) {
-            warn
-"Card $card->{taskid} referenced in bug $bug->{id} missing, clearing kanban whiteboard";
-            clear_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
-            return;
-        }
-      }
-
-      my $cardid = $card->{taskid};
+    my $cardid = $card->{taskid};
 
     push @changes, sync_card( $card, $bug );
 
