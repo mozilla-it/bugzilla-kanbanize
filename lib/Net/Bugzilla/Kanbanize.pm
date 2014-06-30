@@ -255,12 +255,12 @@ sub sync_bug {
 
     if ( $config->verbose ) {
         printf STDERR
-          "[$tstamp][%4d/%4d] Card %4d - Bug %8d - $summary\n", $total, $count, $cardid, $bug->{id};
+          "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - $summary\n", $total, $count, $cardid, $bug->{id};
     }
     
     if (@changes) {
       foreach my $change (@changes) {
-        printf STDERR "[$tstamp][%4d/%4d] Card %4d - Bug %8d - $summary ** %s **\n", $total, $count, $cardid, $bug->{id}, $change;
+        printf STDERR "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - $summary ** %s **\n", $total, $count, $cardid, $bug->{id}, $change;
       }
     }
 }
