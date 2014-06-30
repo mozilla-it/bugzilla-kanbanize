@@ -111,6 +111,7 @@ sub get_bugs {
     }
 
     my @marked = get_marked_bugs();
+    
     foreach my $bug (@marked) {
         $bugs{ $bug->{id} } = $bug;
     }
@@ -315,6 +316,10 @@ sub sync_card {
     # Check Assignee
     my $bug_assigned  = $bug->{assigned_to};
     my $card_assigned = $card->{assignee};
+    
+    if (not defined $card_assigned) {
+      die Dumper($bug, $card);
+    }
 
     if (   defined $card_assigned
         && $card_assigned ne "None"
