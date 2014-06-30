@@ -309,8 +309,6 @@ sub sync_bugzilla {
 
 sub sync_card {
     my ( $card, $bug ) = @_;
-    
-    die Dumper($card, $bug);
 
     my @updated;
 
