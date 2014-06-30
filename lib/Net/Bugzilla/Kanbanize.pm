@@ -244,8 +244,16 @@ sub sync_bug {
 
         push @changes, "[card created]";
     }
-
-    $card = retrieve_card( $card->{taskid} );
+    else {
+        $card = retrieve_card( $card->{taskid} );
+	
+	# Referenced card missing
+	if (not $card) {
+	    warn "Card $card->{taskid} referenced in bug $bug->{id} missing, clearing kanban whiteboard";
+	    clear_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
+	    return;
+	}
+    }
 
     my $cardid = $card->{taskid};
 
@@ -271,6 +279,8 @@ sub retrieve_card {
     if (exists $all_cards->{$card_id}) {
       return $all_cards->{$card_id};
     }
+    
+    warn "Retrieving info for single card $card_id\n";
 
     my $req =
       HTTP::Request->new( POST =>
@@ -278,12 +288,17 @@ sub retrieve_card {
       );
 
     my $res = $ua->request($req);
+    
+    my $data = decode_json( $res->decoded_content );
 
     if ( !$res->is_success ) {
-        die Dumper($res);    #$res->status_line;
+        if ($data->{Error} eq 'No such task or board.') {
+	    return;
+	}
+        die Dumper($data, $res);    #$res->status_line;
     }
 
-    $all_cards->{$card_id} = decode_json( $res->decoded_content );
+    $all_cards->{$card_id} = $data;
 
     return $all_cards->{$card_id};
 }
@@ -294,6 +309,8 @@ sub sync_bugzilla {
 
 sub sync_card {
     my ( $card, $bug ) = @_;
+    
+    die Dumper($card, $bug);
 
     my @updated;
 
@@ -505,6 +522,25 @@ sub update_whiteboard {
 
     $whiteboard =
       "[kanban:https://kanbanize.com/ctrl_board/$BOARD_ID/$cardid] $whiteboard";
+
+    $req->content("whiteboard=$whiteboard&token=$BUGZILLA_TOKEN");
+
+    my $res = $ua->request($req);
+
+    if ( !$res->is_success ) {
+        die $res->status_line;
+    }
+
+}
+
+sub clear_whiteboard {
+    my ( $bugid, $cardid, $whiteboard ) = @_;
+
+    my $req =
+      HTTP::Request->new(
+        PUT => "https://bugzilla.mozilla.org/rest/bug/$bugid" );
+
+    $whiteboard =~ s/\s?\[kanban:[^]]+\]\s?//g;
 
     $req->content("whiteboard=$whiteboard&token=$BUGZILLA_TOKEN");
 
