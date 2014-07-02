@@ -303,8 +303,6 @@ sub retrieve_card {
         return $all_cards->{$card_id};
     }
 
-    warn "Retrieving info for single card $card_id\n";
-
     my $req =
       HTTP::Request->new( POST =>
 "http://kanbanize.com/index.php/api/kanbanize/get_task_details/boardid/$BOARD_ID/taskid/$card_id/format/json"
@@ -394,6 +392,7 @@ sub sync_card {
             #$updated++;
         }
         else {
+	    # If it's in webops, close it, otherwise, skip it ?
             warn
 "Bug $bug->{id} is not RESOLVED ($bug_status) but card $card->{taskid} says $card_status";
         }
