@@ -218,7 +218,7 @@ sub get_bugs_from_all_cards {
     my @bugs;
     foreach my $card (@$cards) {
         # Skip archived cards
-        if ($card->{columnname} eq 'Archive') }
+        if ($card->{columnname} eq 'Archive') {
 	  next;
 	}
         $all_cards->{ $card->{taskid} } = $card;
