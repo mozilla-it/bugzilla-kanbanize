@@ -182,7 +182,7 @@ sub get_cced_bugs {
 sub get_marked_bugs {
     my $req =
       HTTP::Request->new( GET =>
-"https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&status_whiteboard_type=allwordssubstr&query_format=advanced&status_whiteboard=[kanban]"
+"https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&bug_status=UNCONFIRMED&bug_status=NEW&bug_status=ASSIGNED&bug_status=REOPENED&status_whiteboard_type=allwordssubstr&query_format=advanced&status_whiteboard=[kanban]"
       );
 
     my $res = $ua->request($req);
