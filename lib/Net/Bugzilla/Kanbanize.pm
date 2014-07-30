@@ -276,7 +276,7 @@ sub sync_bug {
         push @changes, "[card created]";
     }
 
-    $card = retrieve_card( $card->{taskid} );
+    $card = retrieve_card( $card->{taskid}, $bug->{id} );
 
     # Referenced card missing
     if ( not $card ) {
@@ -308,6 +308,7 @@ sub sync_bug {
 
 sub retrieve_card {
     my $card_id = shift;
+    my $bug_id = shift;
 
     if ( exists $all_cards->{$card_id} ) {
         return $all_cards->{$card_id};
@@ -326,7 +327,9 @@ sub retrieve_card {
         if ( $data->{Error} eq 'No such task or board.' ) {
             return;
         }
-        die Dumper( $data, $res );    #$res->status_line;
+	warn "Can't find card $card_id for bug $bug_id";
+	return;
+        #die Dumper( $data, $res );    #$res->status_line;
     }
 
     $all_cards->{$card_id} = $data;
