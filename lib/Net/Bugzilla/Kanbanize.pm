@@ -276,15 +276,17 @@ sub sync_bug {
         push @changes, "[card created]";
     }
 
-    $card = retrieve_card( $card->{taskid}, $bug->{id} );
+    my $new_card = retrieve_card( $card->{taskid}, $bug->{id} );
 
     # Referenced card missing
-    if ( not $card ) {
+    if ( not $new_card ) {
       warn
     "Card $card->{taskid} referenced in bug $bug->{id} missing, clearing kanban whiteboard";
       clear_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
       return;
     }
+    
+    $card = $new_card;
 
     my $cardid = $card->{taskid};
 
@@ -327,6 +329,7 @@ sub retrieve_card {
         if ( $data->{Error} eq 'No such task or board.' ) {
             return;
         }
+	#XXX: Might need to clear the whiteboard or sth...
 	warn "Can't find card $card_id for bug $bug_id";
 	return;
         #die Dumper( $data, $res );    #$res->status_line;
