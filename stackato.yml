@@ -1,0 +1,15 @@
+name: bugzilla-kanbanize
+framework:
+  type: perl
+  runtime: perl516
+ignores: ["sync.cfg"]
+mem: 256M
+processes:
+  web: ~
+command: sleep 365d
+cron:
+  - "*/5 * * * * ( date ; ./bin/kanbanize-bugzilla-sync ) >>$STACKATO_APP_ROOT/logs/cron.log 2>&1"
+requirements:
+  ppm:
+    - AppConfig
+    - JSON
