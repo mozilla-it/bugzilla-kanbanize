@@ -57,10 +57,10 @@ sub run {
 
     $config = $self->{config};
 
-    $APIKEY = $config->kanbanize_apikey or die "Please configure an apikey";
-    $BOARD_ID = $config->kanbanize_boardid
+    $APIKEY = ( $config->kanbanize_apikey || $ENV{KANBANIZE_APIKEY}) or die "Please configure an apikey";
+    $BOARD_ID = ( $config->kanbanize_boardid || $ENV{KANBANIZE_BOARDID})
       or die "Please configure a kanbanize_boardid";
-    $BUGZILLA_TOKEN = $config->bugzilla_token
+    $BUGZILLA_TOKEN = ( $config->bugzilla_token || $ENV{BUGZILLA_TOKEN})
       or die "Please configure a bugzilla_token";
 
     $ua->timeout(15);
@@ -78,7 +78,7 @@ sub run {
 
     $count = scalar keys %bugs;
 
-    print STDERR "Found a total of $count bugs\n" if $config->verbose;
+    print STDERR "Found a total of $count bugs\n";
 
     $total = 0;
 
@@ -165,7 +165,7 @@ sub fill_missing_bugs_info {
 
 # Also retrieve bugs we are cc'ed on.
 sub get_cced_bugs {
-    my $email = $config->bugzilla_id;
+    my $email = $config->bugzilla_id || $ENV{BUGZILLA_ID};
 
     my $req =
       HTTP::Request->new( GET =>
@@ -212,6 +212,8 @@ sub get_bugs_from_all_cards {
       HTTP::Request->new( POST =>
 "http://kanbanize.com/index.php/api/kanbanize/get_all_tasks/boardid/$BOARD_ID/format/json"
       );
+
+    $req->header( "Content-Length" => "0" );
 
     my $res = $ua->request($req);
 
