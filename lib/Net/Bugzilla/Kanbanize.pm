@@ -114,6 +114,12 @@ sub get_bugs {
     foreach my $bug (@marked) {
         $bugs{ $bug->{id} } = $bug;
     }
+    
+    my @cced = get_cced_bugs();
+
+    foreach my $bug (@cced) {
+        $bugs{ $bug->{id} } = $bug;
+    }
 
     my @cards = get_bugs_from_all_cards();
 
