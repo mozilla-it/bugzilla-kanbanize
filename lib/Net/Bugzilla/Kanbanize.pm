@@ -322,6 +322,8 @@ sub retrieve_card {
       HTTP::Request->new( POST =>
 "http://kanbanize.com/index.php/api/kanbanize/get_task_details/boardid/$BOARD_ID/taskid/$card_id/format/json"
       );
+      
+    $req->header( "Content-Length" => "0" );  
 
     my $res = $ua->request($req);
 
