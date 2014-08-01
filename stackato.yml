@@ -8,7 +8,7 @@ processes:
   web: ~
 command: sleep 365d
 cron:
-  - "*/5 * * * * ( date ; ./bin/kanbanize-bugzilla-sync ) >>$STACKATO_APP_ROOT/logs/cron.log 2>&1"
+  - "*/5 * * * * ( ./bin/kanbanize-bugzilla-sync ) >>$STACKATO_APP_ROOT/logs/cron.log 2>&1"
 requirements:
   ppm:
     - AppConfig
