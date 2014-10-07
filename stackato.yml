@@ -2,7 +2,6 @@ name: bugzilla-kanbanize
 framework:
   type: perl
   runtime: perl516
-ignores: ["sync.cfg"]
 mem: 256M
 processes:
   web: ~
