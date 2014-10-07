@@ -46,6 +46,7 @@ sub version {
 my $APIKEY;
 my $BOARD_ID;
 my $BUGZILLA_TOKEN;
+my $KANBANIZE_INCOMING;
 my $ua = LWP::UserAgent->new();
 
 my $total;
@@ -62,6 +63,8 @@ sub run {
       or die "Please configure a kanbanize_boardid";
     $BUGZILLA_TOKEN = ( $config->bugzilla_token || $ENV{BUGZILLA_TOKEN})
       or die "Please configure a bugzilla_token";
+    
+    $KANBANIZE_INCOMING = $config->kanbanize_incoming;
 
     $ua->timeout(15);
     $ua->env_proxy;
@@ -626,7 +629,7 @@ sub create_card {
 
     $card->{taskid} = $card->{id};
 
-    move_card( $card, 'Pending Triage' );
+    move_card( $card, $KANBANIZE_INCOMING );
 
     return $card;
 }

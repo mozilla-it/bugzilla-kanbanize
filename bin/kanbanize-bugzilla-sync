@@ -16,9 +16,10 @@ my $config = AppConfig->new(
     "version",
     "kanbanize_apikey=s",
     "kanbanize_boardid=i",
+    "kanbanize_incoming=s",
     "bugzilla_token=s",
     "bugzilla_id=s",
-
+    
     # "bugzilla_url=s", { DEFAULT => "https://bugzilla.mozilla.org" },
     # "kanbanize_url=s", { DEFAULT => "http://kanbanize.com" },
 );
