@@ -21,7 +21,11 @@ use HTTP::Request;
 use URI::Escape;
 use List::MoreUtils qw(uniq);
 
+use Log::Log4perl;
+
 #XXX: https://bugzil.la/970457
+
+my $log = Log::Log4perl::get_logger();
 
 sub new {
     my ( $class, $config ) = @_;
@@ -47,6 +51,8 @@ my $APIKEY;
 my $BOARD_ID;
 my $BUGZILLA_TOKEN;
 my $KANBANIZE_INCOMING;
+
+my $DRYRUN;
 my $ua = LWP::UserAgent->new();
 
 my $total;
@@ -55,8 +61,10 @@ my $config;
 
 sub run {
     my $self = shift;
-
+    
     $config = $self->{config};
+    
+    $DRYRUN = $config->get('test');
 
     $APIKEY = ( $config->kanbanize_apikey || $ENV{KANBANIZE_APIKEY}) or die "Please configure an apikey";
     $BOARD_ID = ( $config->kanbanize_boardid || $ENV{KANBANIZE_BOARDID})
@@ -143,11 +151,11 @@ sub fill_missing_bugs_info {
     }
 
     my $missing_bugs_ids = join ",", sort @bugs;
+    
+    my $url = "https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&id=$missing_bugs_ids";
 
     my $req =
-      HTTP::Request->new( GET =>
-"https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&id=$missing_bugs_ids"
-      );
+      HTTP::Request->new( GET => $url );
 
     my $res = $ua->request($req);
 
@@ -300,15 +308,15 @@ sub sync_bug {
     my $tstamp = localtime();
 
     if ( $config->verbose ) {
-        printf STDERR "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - $summary\n",
-          $total, $count, $cardid, $bug->{id};
+        printf(STDERR "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - %s ** %s **\n",
+          $total, $count, $cardid, $bug->{id}, $summary, "in-sync");
     }
 
     if (@changes) {
         foreach my $change (@changes) {
-            printf STDERR
-              "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - $summary ** %s **\n",
-              $total, $count, $cardid, $bug->{id}, $change;
+            printf(STDERR
+              "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - %s ** %s **\n",
+              $total, $count, $cardid, $bug->{id}, $summary, $change);
         }
     }
 }
@@ -451,6 +459,11 @@ sub complete_card {
         taskid  => $taskid,
         column  => 'Done',
     };
+    
+    if ($DRYRUN) {
+      warn "complete card";
+      return;
+    }
 
     my $req =
       HTTP::Request->new( POST =>
@@ -462,7 +475,13 @@ sub complete_card {
     my $res = $ua->request($req);
 
     if ( !$res->is_success ) {
-        die Dumper($res);    #$res->status_line;
+        my $content = $res->content;
+	my $status  = $res->status_line;
+	if ($content) {
+	  
+	} else {
+          warn Dumper($res);    #$res->status_line;
+	}
     }
 }
 
@@ -476,6 +495,11 @@ sub update_card_extlink {
         taskid  => $taskid,
         extlink => $extlink,
     };
+
+    if ($DRYRUN) {
+      warn "update_card_extlink";
+      return;
+    }
 
     my $req =
       HTTP::Request->new( POST =>
@@ -497,6 +521,11 @@ sub update_bug_assigned {
     $assigned .= '@mozilla.com';
 
     my $bugid = $bug->{id};
+    
+    if ($DRYRUN) {
+      warn "Updating bug assigned to $assigned";
+      return;
+    }
 
     my $req =
       HTTP::Request->new(
@@ -522,6 +551,10 @@ sub update_card_summary {
         title   => $bug_summary,
     };
 
+    if($DRYRUN) {
+      warn "Update card summary : $bug_summary";
+    }
+
     my $req =
       HTTP::Request->new( POST =>
           "http://kanbanize.com/index.php/api/kanbanize/edit_task/format/json"
@@ -542,6 +575,11 @@ sub update_card_assigned {
     my $taskid = $card->{taskid};
     ( my $assignee = $bug_assigned ) =~ s/\@.*//;
 
+    if ($DRYRUN) {
+      warn "Update card assigned: $assignee";
+      return;
+    }
+
     my $req =
       HTTP::Request->new( POST =>
 "http://kanbanize.com/index.php/api/kanbanize/edit_task/format/json/boardid/$BOARD_ID/taskid/$taskid/assignee/$assignee"
@@ -554,11 +592,15 @@ sub update_card_assigned {
     if ( !$res->is_success ) {
         die $res->status_line;
     }
-
 }
 
 sub update_whiteboard {
     my ( $bugid, $cardid, $whiteboard ) = @_;
+    
+    if ($DRYRUN) {
+      warn "Updating whiteboard";
+      return;
+    }
 
     my $req =
       HTTP::Request->new(
@@ -584,6 +626,11 @@ sub update_whiteboard {
 sub clear_whiteboard {
     my ( $bugid, $cardid, $whiteboard ) = @_;
 
+    if ($DRYRUN) {
+      warn "Clearing whiteboard";
+      return;
+    }
+
     my $req =
       HTTP::Request->new(
         PUT => "https://bugzilla.mozilla.org/rest/bug/$bugid" );
@@ -603,6 +650,11 @@ sub clear_whiteboard {
 #XXX: https://bugzil.la/970457
 sub create_card {
     my $bug = shift;
+    
+    if ($DRYRUN) {
+      warn "Creating card";
+      return { taskid => 0, id => 0, };
+    }
 
     my $data = {
         'title'   => "$bug->{id} - $bug->{summary}",
@@ -636,6 +688,11 @@ sub create_card {
 
 sub move_card {
     my ( $card, $lane ) = @_;
+    
+    if ($DRYRUN) {
+      warn "Moving card to $lane";
+      return;
+    }
 
     my $data = {
         boardid => $BOARD_ID,
@@ -689,6 +746,13 @@ sub parse_whiteboard {
         my $cardid  = $2;
 
         $card = { taskid => $cardid };
+    }
+    elsif ( $whiteboard =~ m{\[kanban:ignore\]} ) {
+      warn "Should ignore this card!";
+      $card = {
+        ignore => 1,
+	taskid => 0 
+      };
     }
 
     return $card;
