@@ -21,7 +21,7 @@ use HTTP::Request;
 use URI::Escape;
 use List::MoreUtils qw(uniq);
 
-use Log::Log4perl;
+use Log::Log4perl ();
 
 #XXX: https://bugzil.la/970457
 
@@ -89,7 +89,7 @@ sub run {
 
     $count = scalar keys %bugs;
 
-    print STDERR "Found a total of $count bugs\n" if $config->verbose;
+    $log->info("Found a total of $count bugs") if $config->verbose;
 
     $total = 0;
 
@@ -118,18 +118,21 @@ sub get_bugs {
 
     foreach my $bug ( @{ $data->{bugs} } ) {
         $bugs{ $bug->{id} } = $bug;
+	$bugs{ $bug->{id} }{source} = "search";
     }
 
     my @marked = get_marked_bugs();
 
     foreach my $bug (@marked) {
         $bugs{ $bug->{id} } = $bug;
+	$bugs{ $bug->{id} }{source} = "marked";
     }
     
     my @cced = get_cced_bugs();
 
     foreach my $bug (@cced) {
         $bugs{ $bug->{id} } = $bug;
+	$bugs{ $bug->{id} }{source} = "cc";
     }
 
     my @cards = get_bugs_from_all_cards();
@@ -146,11 +149,12 @@ sub fill_missing_bugs_info {
 
     foreach my $bugid (@bugs) {
         if ( not exists $bugs->{$bugid} ) {
+	    $log->warn("Didn't find bug $bugid");
             push @missing_bugs, $bugid;
         }
     }
 
-    my $missing_bugs_ids = join ",", sort @bugs;
+    my $missing_bugs_ids = join ",", sort @missing_bugs;
     
     my $url = "https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&id=$missing_bugs_ids";
 
@@ -169,6 +173,7 @@ sub fill_missing_bugs_info {
 
     foreach my $bug ( sort @found_bugs ) {
         $bugs->{ $bug->{id} } = $bug;
+	$bugs->{ $bug->{id} }{source} = "card";
     }
 
     return;
@@ -274,7 +279,6 @@ sub sync_bug {
     my $whiteboard = $bug->{whiteboard};
 
     my $card = parse_whiteboard($whiteboard);
-
     my @changes;
     if ( not defined $card ) {
         $card = create_card($bug);
@@ -308,15 +312,15 @@ sub sync_bug {
     my $tstamp = localtime();
 
     if ( $config->verbose ) {
-        printf(STDERR "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - %s ** %s **\n",
-          $total, $count, $cardid, $bug->{id}, $summary, "in-sync");
+        printf(STDERR "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - [%s] %s ** %s **\n",
+          $total, $count, $cardid, $bug->{id}, $bug->{source}, $summary, "in-sync");
     }
 
     if (@changes) {
         foreach my $change (@changes) {
             printf(STDERR
-              "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - %s ** %s **\n",
-              $total, $count, $cardid, $bug->{id}, $summary, $change);
+              "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - [%s] %s ** %s **\n",
+              $total, $count, $cardid, $bug->{id}, $bug->{source}, $summary, $change);
         }
     }
 }
