@@ -738,8 +738,7 @@ sub get_bug_info {
         return { id => $bugid, error => "No Data" };
     }
 
-    print STDERR "Retrieving info for Bug $bugid from bugzilla\n"
-      if $config->verbose;
+    $log->debug("Retrieving info for Bug $bugid from bugzilla");
 
     $data = decode_json($data);
 
