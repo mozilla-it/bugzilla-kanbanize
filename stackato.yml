@@ -3,6 +3,7 @@ framework:
   type: perl
   runtime: perl516
 mem: 256M
+disk: 2048
 processes:
   web: ~
 command: sleep 365d
@@ -12,3 +13,4 @@ requirements:
   ppm:
     - AppConfig
     - JSON
+    - Log::Log4perl
