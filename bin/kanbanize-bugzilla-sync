@@ -7,12 +7,7 @@ use warnings;
 
 use FindBin;
 use lib "$FindBin::Bin/../lib";
-
 use Log::Log4perl qw(:easy);
-Log::Log4perl->easy_init({
-  level => $INFO,
-  layout => '%d{APACHE} [%p] %m%n',
-});
 
 use Net::Bugzilla::Kanbanize;
 
@@ -26,6 +21,8 @@ my $config = AppConfig->new(
     "kanbanize_incoming=s",
     "bugzilla_token=s",
     "bugzilla_id=s",
+    "component=s@",
+    "product=s@",
     
     # "bugzilla_url=s", { DEFAULT => "https://bugzilla.mozilla.org" },
     # "kanbanize_url=s", { DEFAULT => "http://kanbanize.com" },
@@ -33,6 +30,16 @@ my $config = AppConfig->new(
 
 $config->file("sync.cfg") if -r "sync.cfg";
 $config->args();
+
+my $loglevel = $INFO;
+if ($config->verbose) {
+  $loglevel = $DEBUG;
+}
+
+Log::Log4perl->easy_init({
+  level => $loglevel,
+  layout => '%d{APACHE} [%p] %m%n',
+});
 
 my $app = Net::Bugzilla::Kanbanize->new($config);
 

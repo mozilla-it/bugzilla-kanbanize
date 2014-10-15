@@ -51,6 +51,8 @@ my $APIKEY;
 my $BOARD_ID;
 my $BUGZILLA_TOKEN;
 my $KANBANIZE_INCOMING;
+my @COMPONENTS;
+my @PRODUCTS;
 
 my $DRYRUN;
 my $ua = LWP::UserAgent->new();
@@ -73,6 +75,9 @@ sub run {
       or die "Please configure a bugzilla_token";
     
     $KANBANIZE_INCOMING = $config->kanbanize_incoming;
+    
+    @COMPONENTS = @{$config->component};
+    @PRODUCTS = @{$config->product};
 
     $ua->timeout(15);
     $ua->env_proxy;
@@ -89,7 +94,7 @@ sub run {
 
     $count = scalar keys %bugs;
 
-    $log->info("Found a total of $count bugs") if $config->verbose;
+    $log->debug("Found a total of $count bugs");
 
     $total = 0;
 
@@ -100,11 +105,19 @@ sub run {
     return 1;
 }
 
+use URI;
+use URI::QueryParam;
+
 sub get_bugs {
-    my $req =
-      HTTP::Request->new( GET =>
-"https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&bug_status=UNCONFIRMED&bug_status=NEW&bug_status=ASSIGNED&bug_status=REOPENED&component=WebOps%3A Bugzilla&component=WebOps%3A Community Platform&component=WebOps%3A Engagement&component=WebOps%3A IT-Managed Tools&component=WebOps%3A Labs&component=WebOps%3A Other&component=WebOps%3A Product Delivery&component=WebOps%3A SSL and Domain Names&product=Infrastructure %26 Operations"
-      );
+    my $uri = URI->new("https://bugzilla.mozilla.org/rest/bug");
+
+    $uri->query_param(token => $BUGZILLA_TOKEN);
+    $uri->query_param(include_fields => qw(id status whiteboard summary assigned_to));
+    $uri->query_param(bug_status => qw(NEW UNCONFIRMED REOPENED ASSIGNED));
+    $uri->query_param(product => @PRODUCTS);
+    $uri->query_param(component => @COMPONENTS);
+
+    my $req = HTTP::Request->new( GET => $uri );
 
     my $res = $ua->request($req);
 
@@ -149,7 +162,6 @@ sub fill_missing_bugs_info {
 
     foreach my $bugid (@bugs) {
         if ( not exists $bugs->{$bugid} ) {
-	    $log->warn("Didn't find bug $bugid");
             push @missing_bugs, $bugid;
         }
     }
@@ -265,13 +277,12 @@ sub sync_bug {
     $total++;
 
     if ( not defined $bug ) {
-        print STDERR "[$total/$count] No info for bug $bug->{id}\n";
+        $log->warn("[$total/$count] No info for bug $bug->{id}");
         return;
     }
 
     if ( $bug->{error} ) {
-        print STDERR
-          "[$total/$count] No info for bug $bug->{id} (Private bug?)\n";
+        $log->warn("[$total/$count] No info for bug $bug->{id} (Private bug?)");
         return;
     }
 
@@ -284,7 +295,7 @@ sub sync_bug {
         $card = create_card($bug);
 
         if ( not $card ) {
-            warn "Failed to create card for bug $bug->{id}";
+            $log->warn("Failed to create card for bug $bug->{id}");
             return;
         }
 
@@ -297,8 +308,8 @@ sub sync_bug {
 
     # Referenced card missing
     if ( not $new_card ) {
-      warn
-    "Card $card->{taskid} referenced in bug $bug->{id} missing, clearing kanban whiteboard";
+      $log->warn(
+    "Card $card->{taskid} referenced in bug $bug->{id} missing, clearing kanban whiteboard");
       clear_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
       return;
     }
@@ -309,17 +320,14 @@ sub sync_bug {
 
     push @changes, sync_card( $card, $bug );
 
-    my $tstamp = localtime();
-
     if ( $config->verbose ) {
-        printf(STDERR "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - [%s] %s ** %s **\n",
+        $log->debug(sprintf "[%4d/%4d] Card %4d - Bug %8d - [%s] %s ** %s **",
           $total, $count, $cardid, $bug->{id}, $bug->{source}, $summary, "in-sync");
     }
 
     if (@changes) {
         foreach my $change (@changes) {
-            printf(STDERR
-              "[$tstamp] [%4d/%4d] Card %4d - Bug %8d - [%s] %s ** %s **\n",
+            $log->info(sprintf "[%4d/%4d] Card %4d - Bug %8d - [%s] %s ** %s **",
               $total, $count, $cardid, $bug->{id}, $bug->{source}, $summary, $change);
         }
     }
