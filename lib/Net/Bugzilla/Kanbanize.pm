@@ -624,6 +624,8 @@ sub update_card_assigned {
       return;
     }
 
+    $assignee = URI::Escape::uri_escape($assignee);
+
     my $req =
       HTTP::Request->new( POST =>
 "http://kanbanize.com/index.php/api/kanbanize/edit_task/format/json/boardid/$BOARD_ID/taskid/$taskid/assignee/$assignee"
@@ -634,6 +636,7 @@ sub update_card_assigned {
     my $res = $ua->request($req);
 
     if ( !$res->is_success ) {
+        warn Dumper($res);
         die $res->status_line;
     }
 }
