@@ -422,7 +422,7 @@ sub sync_card {
         push @updated, "Update bug $bug->{id} assigned to $card_assigned";
         update_bug_assigned( $bug, $card_assigned );
     }
-    elsif ($bug_assigned !~ m[^$card_assigned@]
+    elsif ($bug_assigned !~ m[^\Q$card_assigned\E@]
         && $bug_assigned !~ m/\@.*\.bugs$/ )
     {
         push @updated, "Update card assigned to $bug_assigned";
@@ -785,6 +785,7 @@ sub parse_whiteboard {
 
     my $card;
 
+    #XXX: Unqualified kanmban tag, need to handle...
     if ( $whiteboard =~
         m{\[kanban:https://kanbanize.com/ctrl_board/(\d+)/(\d+)\]} )
     {
