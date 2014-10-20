@@ -51,6 +51,7 @@ my $APIKEY;
 my $BOARD_ID;
 my $BUGZILLA_TOKEN;
 my $KANBANIZE_INCOMING;
+my $WHITEBOARD_TAG;
 my @COMPONENTS;
 my @PRODUCTS;
 
@@ -75,6 +76,8 @@ sub run {
       or die "Please configure a bugzilla_token";
     
     $KANBANIZE_INCOMING = $config->kanbanize_incoming;
+    
+    $WHITEBOARD_TAG = $config->tag || die "Missing whiteboard tag";
     
     @COMPONENTS = @{$config->component};
     @PRODUCTS = @{$config->product};
@@ -165,6 +168,10 @@ sub fill_missing_bugs_info {
             push @missing_bugs, $bugid;
         }
     }
+    
+    if (not @missing_bugs) {
+      return;
+    }
 
     my $missing_bugs_ids = join ",", sort @missing_bugs;
     
@@ -214,10 +221,18 @@ sub get_cced_bugs {
 }
 
 sub get_marked_bugs {
+    my $uri = URI->new("https://bugzilla.mozilla.org/rest/bug");
+
+    $uri->query_param(token => $BUGZILLA_TOKEN);
+    $uri->query_param(include_fields => qw(id status whiteboard summary assigned_to));
+    $uri->query_param(bug_status => qw(NEW UNCONFIRMED REOPENED ASSIGNED));
+    $uri->query_param(product => @PRODUCTS);
+    $uri->query_param(status_whiteboard_type => 'allwordssubstr');
+    $uri->query_param(query_format => 'advanced');
+    $uri->query_param(status_whiteboard => "[kanban:$WHITEBOARD_TAG]");
+
     my $req =
-      HTTP::Request->new( GET =>
-"https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&bug_status=UNCONFIRMED&bug_status=NEW&bug_status=ASSIGNED&bug_status=REOPENED&status_whiteboard_type=allwordssubstr&query_format=advanced&status_whiteboard=[kanban]"
-      );
+      HTTP::Request->new( GET => $uri );
 
     my $res = $ua->request($req);
 
@@ -292,6 +307,12 @@ sub sync_bug {
     my $card = parse_whiteboard($whiteboard);
     my @changes;
     if ( not defined $card ) {
+        if ($bug->{source} eq 'card') {
+	  # This is a bug that came from a card but without a matching whiteboard...
+	  $log->warn("Bug $bug->{id} came from a card, but whiteboard is empty");
+	  return;
+	}
+
         $card = create_card($bug);
 
         if ( not $card ) {
@@ -336,6 +357,16 @@ sub sync_bug {
 sub retrieve_card {
     my $card_id = shift;
     my $bug_id = shift;
+    
+    if ($DRYRUN) {
+      return { 
+        taskid => 0,
+	assignee => 'dryrun@mozilla.com',
+	title => 'Dryrun Summary',
+	columnname => 'Dryrun',
+	extlink => 'http://dryrun.com/foo',
+      };
+    }
 
     if ( exists $all_cards->{$card_id} ) {
         return $all_cards->{$card_id};
@@ -565,6 +596,7 @@ sub update_card_summary {
 
     if($DRYRUN) {
       warn "Update card summary : $bug_summary";
+      return;
     }
 
     my $req =
@@ -588,7 +620,7 @@ sub update_card_assigned {
     ( my $assignee = $bug_assigned ) =~ s/\@.*//;
 
     if ($DRYRUN) {
-      warn "Update card assigned: $assignee";
+      $log->debug("Update card assigned: $assignee");
       return;
     }
 
@@ -618,12 +650,12 @@ sub update_whiteboard {
       HTTP::Request->new(
         PUT => "https://bugzilla.mozilla.org/rest/bug/$bugid" );
 
-    if ( $whiteboard =~ m/\[kanban\]/ ) {
-        $whiteboard =~ s/\[kanban\]//;
+    if ( $whiteboard =~ m/\[kanban:$WHITEBOARD_TAG\]/ ) {
+        $whiteboard =~ s/\[kanban:$WHITEBOARD_TAG\]//;
     }
 
     $whiteboard =
-      "[kanban:https://kanbanize.com/ctrl_board/$BOARD_ID/$cardid] $whiteboard";
+      "[kanban:$WHITEBOARD_TAG:https://kanbanize.com/ctrl_board/$BOARD_ID/$cardid] $whiteboard";
 
     $req->content("whiteboard=$whiteboard&token=$BUGZILLA_TOKEN");
 
@@ -752,6 +784,14 @@ sub parse_whiteboard {
 
     if ( $whiteboard =~
         m{\[kanban:https://kanbanize.com/ctrl_board/(\d+)/(\d+)\]} )
+    {
+        my $boardid = $1;
+        my $cardid  = $2;
+
+        $card = { taskid => $cardid };
+    }
+    elsif ( $whiteboard =~
+        m{\[kanban:$WHITEBOARD_TAG:https://kanbanize.com/ctrl_board/(\d+)/(\d+)\]} )
     {
         my $boardid = $1;
         my $cardid  = $2;

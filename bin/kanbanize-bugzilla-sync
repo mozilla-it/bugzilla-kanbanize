@@ -23,6 +23,7 @@ my $config = AppConfig->new(
     "bugzilla_id=s",
     "component=s@",
     "product=s@",
+    "tag=s",
     
     # "bugzilla_url=s", { DEFAULT => "https://bugzilla.mozilla.org" },
     # "kanbanize_url=s", { DEFAULT => "http://kanbanize.com" },
