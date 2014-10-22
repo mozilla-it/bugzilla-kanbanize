@@ -362,16 +362,6 @@ sub sync_bug {
 sub retrieve_card {
     my $card_id = shift;
     my $bug_id = shift;
-    
-    if ($DRYRUN) {
-      return { 
-        taskid => 0,
-	assignee => 'dryrun@mozilla.com',
-	title => 'Dryrun Summary',
-	columnname => 'Dryrun',
-	extlink => 'http://dryrun.com/foo',
-      };
-    }
 
     if ( exists $all_cards->{$card_id} ) {
         return $all_cards->{$card_id};
@@ -393,7 +383,7 @@ sub retrieve_card {
             return;
         }
 	#XXX: Might need to clear the whiteboard or sth...
-	warn "Can't find card $card_id for bug $bug_id";
+	$log->warn("Can't find card $card_id for bug $bug_id");
 	return;
         #die Dumper( $data, $res );    #$res->status_line;
     }
@@ -446,7 +436,7 @@ sub sync_card {
 	my $bugmail = kanbanid_to_bugmail($kanbanid);
 
 	if ($bug_assigned ne $bugmail) {
-	  warn "[bug $bug->{id}] Bugmail user $bug_assigned not mapped to a kanban user, skipping assigned checks";
+	  log->warn("[bug $bug->{id}] Bugmail user $bug_assigned not mapped to a kanban user, skipping assigned checks");
 	}
 	else {
           push @updated, "Update card assigned to $kanbanid";
@@ -491,8 +481,7 @@ sub sync_card {
         }
         else {
 	    # If it's in webops, close it, otherwise, skip it ?
-            warn
-"Bug $bug->{id} is not RESOLVED ($bug_status) but card $card->{taskid} says $card_status";
+            $log->warn("Bug $bug->{id} is not RESOLVED ($bug_status) but card $card->{taskid} says $card_status");
         }
     }
 
@@ -510,8 +499,7 @@ sub sync_card {
 sub reopen_card {
     my $card = shift;
 
-    warn
-"[notimplemented] Should be reopening card $card->{taskid} and moving back to ready";
+    $log->warn("[notimplemented] Should be reopening card $card->{taskid} and moving back to ready");
 
     return;
 }
@@ -528,7 +516,7 @@ sub complete_card {
     };
     
     if ($DRYRUN) {
-      warn "complete card";
+      $log->debug("complete card");
       return;
     }
 
@@ -547,7 +535,7 @@ sub complete_card {
 	if ($content) {
 	  
 	} else {
-          warn Dumper($res);    #$res->status_line;
+          $log->warn(Dumper($res));    #$res->status_line;
 	}
     }
 }
@@ -564,7 +552,7 @@ sub update_card_extlink {
     };
 
     if ($DRYRUN) {
-      warn "update_card_extlink";
+      $log->debug("update_card_extlink");
       return;
     }
 
@@ -590,7 +578,7 @@ sub update_bug_assigned {
     my $bugid = $bug->{id};
     
     if ($DRYRUN) {
-      warn "Updating bug assigned to $assigned";
+      $log->debug( "Updating bug assigned to $assigned" );
       return;
     }
 
@@ -615,7 +603,7 @@ sub update_bug_assigned {
 	  if (ref($error) eq 'HASH') {
 	    my $code = $error->{code};
 	    my $error_message = $error->{message};
-	    warn "Error no=$code talking to bugzilla: $error_message";
+	    $log->error("Error no=$code talking to bugzilla: $error_message");
 	    return;
 	  }
 	}
@@ -639,7 +627,7 @@ sub update_card_summary {
     };
 
     if($DRYRUN) {
-      warn "Update card summary : $bug_summary";
+      $log->debug("Update card summary : $bug_summary");
       return;
     }
 
@@ -690,7 +678,7 @@ sub update_whiteboard {
     my ( $bugid, $cardid, $whiteboard ) = @_;
     
     if ($DRYRUN) {
-      warn "Updating whiteboard";
+      $log->debug( "Updating whiteboard" );
       return;
     }
 
@@ -719,7 +707,7 @@ sub clear_whiteboard {
     my ( $bugid, $cardid, $whiteboard ) = @_;
 
     if ($DRYRUN) {
-      warn "Clearing whiteboard";
+      $log->debug( "Clearing whiteboard" );
       return;
     }
 
@@ -744,7 +732,7 @@ sub create_card {
     my $bug = shift;
     
     if ($DRYRUN) {
-      warn "Creating card";
+      $log->debug( "Creating card" );
       return { taskid => 0, id => 0, };
     }
 
@@ -764,7 +752,7 @@ sub create_card {
     my $res = $ua->request($req);
 
     if ( !$res->is_success ) {
-        warn "can't create card:" . $res->status_line;
+        $log->error( "can't create card:" . $res->status_line );
         die Dumper($res);
         return;
     }
@@ -782,7 +770,7 @@ sub move_card {
     my ( $card, $lane ) = @_;
     
     if ($DRYRUN) {
-      warn "Moving card to $lane";
+      $log->debug( "Moving card to $lane" );
       return;
     }
 
@@ -814,7 +802,7 @@ sub get_bug_info {
       get("https://bugzilla.mozilla.org/rest/bug/$bugid?token=$BUGZILLA_TOKEN");
 
     if ( not $data ) {
-        warn "Failed getting Bug info for Bug $bugid from bugzilla\n";
+        $log->error( "Failed getting Bug info for Bug $bugid from bugzilla" );
         return { id => $bugid, error => "No Data" };
     }
 
@@ -838,7 +826,7 @@ sub parse_whiteboard {
         my $cardid  = $2;
 	
 	if ($BOARD_ID ne $boardid) {
-	  warn "Found a card from a mismatched board:$boardid";
+	  $log->warn( "Found a card from a mismatched board:$boardid" );
 	  return undef;
 	}
 
@@ -851,14 +839,14 @@ sub parse_whiteboard {
         my $cardid  = $2;
 
 	if ($BOARD_ID ne $boardid) {
-	  warn "Found a card from a mismatched board:$boardid";
+	  $log->warn( "Found a card from a mismatched board:$boardid" );
 	  return undef;
 	}
 
         $card = { taskid => $cardid };
     }
     elsif ( $whiteboard =~ m{\[kanban:ignore\]} ) {
-      warn "Should ignore this card!";
+      $log->info( "Should ignore this card!" );
       $card = {
         ignore => 1,
 	taskid => 0 
