@@ -54,6 +54,8 @@ my $KANBANIZE_INCOMING;
 my $WHITEBOARD_TAG;
 my @COMPONENTS;
 my @PRODUCTS;
+my %BUGMAIL_TO_KANBANID;
+my %KANBANID_TO_BUGMAIL;
 
 my $DRYRUN;
 my $ua = LWP::UserAgent->new();
@@ -81,6 +83,9 @@ sub run {
     
     @COMPONENTS = @{$config->component};
     @PRODUCTS = @{$config->product};
+    
+    %BUGMAIL_TO_KANBANID = %{$config->get("mail-map_bugmail")};
+    %KANBANID_TO_BUGMAIL = reverse %BUGMAIL_TO_KANBANID;
 
     $ua->timeout(15);
     $ua->env_proxy;
@@ -410,6 +415,10 @@ sub sync_card {
     # Check Assignee
     my $bug_assigned  = $bug->{assigned_to};
     my $card_assigned = $card->{assignee};
+    
+    # Need to convert assigned to canonical version, bugmail
+    
+    my $card_assigned_bugmail = kanbanid_to_bugmail($card->{assignee});
 
     if ( not defined $card_assigned ) {
         die Dumper( $bug, $card );
@@ -417,7 +426,9 @@ sub sync_card {
 
     if (   defined $card_assigned
         && $card_assigned ne "None"
-        && $bug_assigned =~ m/\@.*\.bugs$/ )
+	&& $card_assigned ne 'nobody'
+        && !assigned_bugzilla_email($bug_assigned)
+	 )
     {
         my $error = update_bug_assigned( $bug, $card_assigned );
 	
@@ -427,14 +438,22 @@ sub sync_card {
 	
         push @updated, "Update bug $bug->{id} assigned to $card_assigned $error";
     }
-    elsif ($bug_assigned !~ m[^\Q$card_assigned\E@]
-        && $bug_assigned !~ m/\@.*\.bugs$/ )
+    elsif ( ($bug_assigned ne $card_assigned_bugmail)
+        && assigned_bugzilla_email($bug_assigned) )
     {
-        push @updated, "Update card assigned to $bug_assigned";
+        
+        my $kanbanid = bugmail_to_kanbanid($bug_assigned);
+	my $bugmail = kanbanid_to_bugmail($kanbanid);
 
-        #print STDERR
-        # "bug_asigned: $bug_assigned card_assigned: $card_assigned\n";
-        update_card_assigned( $card, $bug_assigned );
+	if ($bug_assigned ne $bugmail) {
+	  warn "[bug $bug->{id}] Bugmail user $bug_assigned not mapped to a kanban user, skipping assigned checks";
+	}
+	else {
+          push @updated, "Update card assigned to $kanbanid";
+          #print STDERR
+          # "bug_asigned: $bug_assigned card_assigned: $card_assigned\n";
+          update_card_assigned( $card, $bug_assigned );
+	}
     }
 
     #Check summary (XXX: Formatting assumption here)
@@ -482,7 +501,7 @@ sub sync_card {
 
     if ( $card->{extlink} ne $bug_link ) {
         update_card_extlink( $card, $bug_link );
-        push @updated, "Updated external link to bugzilla";
+        push @updated, "Updated external link to bugzilla ( $card->{extlink} => $bug_link)";
     }
 
     return @updated;
@@ -565,8 +584,8 @@ sub update_card_extlink {
 
 sub update_bug_assigned {
     my ( $bug, $assigned ) = @_;
-
-    $assigned .= '@mozilla.com';
+    
+    $assigned = kanbanid_to_bugmail($assigned);
 
     my $bugid = $bug->{id};
     
@@ -642,7 +661,8 @@ sub update_card_assigned {
     my ( $card, $bug_assigned ) = @_;
 
     my $taskid = $card->{taskid};
-    ( my $assignee = $bug_assigned ) =~ s/\@.*//;
+    
+    my $assignee = bugmail_to_kanbanid($bug_assigned);
 
     if ($DRYRUN) {
       $log->debug("Update card assigned: $assignee");
@@ -836,6 +856,51 @@ sub parse_whiteboard {
     }
 
     return $card;
+}
+
+sub assigned_bugzilla_email {
+  my $mail = shift;
+  
+  my $assigned = 1;
+  
+  if ($mail =~ m/\@.*\.bugs$/) {
+    $assigned = 0;
+  }
+  
+  if ($mail eq 'nobody@mozilla.org') {
+    $assigned = 0;
+  }
+    
+  return $assigned;
+}
+
+sub bugmail_to_kanbanid {
+  my $bugmail = shift;
+  my $kanbanid;
+  
+  if (exists $BUGMAIL_TO_KANBANID{$bugmail}) {
+    $kanbanid = $BUGMAIL_TO_KANBANID{$bugmail};
+  }
+  else {
+    ( $kanbanid = $bugmail ) =~ s/\@.*//;
+  }
+  
+  return $kanbanid;
+}
+
+
+sub kanbanid_to_bugmail {
+  my $kanbanid = shift;
+  my $bugmail;
+  
+  if (exists $KANBANID_TO_BUGMAIL{$kanbanid}) {
+    $bugmail = $KANBANID_TO_BUGMAIL{$kanbanid}
+  }
+  else {
+    $bugmail = "$kanbanid\@mozilla.com";
+  }
+  
+  return $bugmail;
 }
 
 1;

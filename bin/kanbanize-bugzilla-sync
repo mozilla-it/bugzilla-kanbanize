@@ -24,6 +24,7 @@ my $config = AppConfig->new(
     "component=s@",
     "product=s@",
     "tag=s",
+    "mail-map_bugmail=%",
     
     # "bugzilla_url=s", { DEFAULT => "https://bugzilla.mozilla.org" },
     # "kanbanize_url=s", { DEFAULT => "http://kanbanize.com" },
