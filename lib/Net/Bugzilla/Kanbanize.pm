@@ -836,6 +836,11 @@ sub parse_whiteboard {
     {
         my $boardid = $1;
         my $cardid  = $2;
+	
+	if ($BOARD_ID ne $boardid) {
+	  warn "Found a card from a mismatched board:$boardid";
+	  return undef;
+	}
 
         $card = { taskid => $cardid };
     }
@@ -844,6 +849,11 @@ sub parse_whiteboard {
     {
         my $boardid = $1;
         my $cardid  = $2;
+
+	if ($BOARD_ID ne $boardid) {
+	  warn "Found a card from a mismatched board:$boardid";
+	  return undef;
+	}
 
         $card = { taskid => $cardid };
     }
