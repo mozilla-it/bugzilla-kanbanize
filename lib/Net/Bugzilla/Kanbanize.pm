@@ -419,8 +419,13 @@ sub sync_card {
         && $card_assigned ne "None"
         && $bug_assigned =~ m/\@.*\.bugs$/ )
     {
-        push @updated, "Update bug $bug->{id} assigned to $card_assigned";
-        update_bug_assigned( $bug, $card_assigned );
+        my $error = update_bug_assigned( $bug, $card_assigned );
+	
+	if (!$error) {
+	  $error = "**FAILED**";
+	}
+	
+        push @updated, "Update bug $bug->{id} assigned to $card_assigned $error";
     }
     elsif ($bug_assigned !~ m[^\Q$card_assigned\E@]
         && $bug_assigned !~ m/\@.*\.bugs$/ )
@@ -579,8 +584,28 @@ sub update_bug_assigned {
     my $res = $ua->request($req);
 
     if ( !$res->is_success ) {
+        my $ct = $res->content_type;
+	
+	if ($ct eq 'application/json') {
+	  my $error;
+	  
+	  eval {
+	    $error = decode_json($res->content);
+	  };
+	  
+	  if (ref($error) eq 'HASH') {
+	    my $code = $error->{code};
+	    my $error_message = $error->{message};
+	    warn "Error no=$code talking to bugzilla: $error_message";
+	    return;
+	  }
+	}
+	
+	
         die Dumper($res);    #$res->status_line;
     }
+    
+    return $res->is_success;
 }
 
 sub update_card_summary {
