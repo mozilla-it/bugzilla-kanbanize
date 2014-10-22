@@ -1,4 +1,5 @@
 name: bugzilla-kanbanize
+instances: 1
 framework:
   type: perl
   runtime: perl516
