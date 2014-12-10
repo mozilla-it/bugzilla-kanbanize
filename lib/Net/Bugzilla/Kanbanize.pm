@@ -436,7 +436,7 @@ sub sync_card {
 	my $bugmail = kanbanid_to_bugmail($kanbanid);
 
 	if ($bug_assigned ne $bugmail) {
-	  log->warn("[bug $bug->{id}] Bugmail user $bug_assigned not mapped to a kanban user, skipping assigned checks");
+	  $log->warn("[bug $bug->{id}] Bugmail user $bug_assigned not mapped to a kanban user, skipping assigned checks");
 	}
 	else {
           push @updated, "Update card assigned to $kanbanid";
