@@ -94,7 +94,7 @@ sub run {
     my %bugs;
 
     if (@ARGV) {
-        fill_missing_bugs_info( \%bugs, @ARGV );
+        fill_missing_bugs_info( "argv", \%bugs, @ARGV );
     }
     else {
         %bugs = get_bugs();
@@ -158,13 +158,13 @@ sub get_bugs {
 
     my @cards = get_bugs_from_all_cards();
 
-    fill_missing_bugs_info( \%bugs, @cards );
+    fill_missing_bugs_info( "card", \%bugs, @cards );
 
     return %bugs;
 }
 
 sub fill_missing_bugs_info {
-    my ( $bugs, @bugs ) = @_;
+    my ( $source, $bugs, @bugs ) = @_;
 
     my @missing_bugs;
 
@@ -197,7 +197,7 @@ sub fill_missing_bugs_info {
 
     foreach my $bug ( sort @found_bugs ) {
         $bugs->{ $bug->{id} } = $bug;
-	$bugs->{ $bug->{id} }{source} = "card";
+	$bugs->{ $bug->{id} }{source} = $;
     }
 
     return;
@@ -258,7 +258,7 @@ sub get_bugs_from_all_cards {
 
     my $req =
       HTTP::Request->new( POST =>
-"http://kanbanize.com/index.php/api/kanbanize/get_all_tasks/boardid/$BOARD_ID/format/json"
+"http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/get_all_tasks/boardid/$BOARD_ID/format/json"
       );
 
     $req->header( "Content-Length" => "0" );
@@ -310,6 +310,7 @@ sub sync_bug {
     my $whiteboard = $bug->{whiteboard};
 
     my $card = parse_whiteboard($whiteboard);
+    
     my @changes;
     if ( not defined $card ) {
         if ($bug->{source} eq 'card') {
@@ -369,7 +370,7 @@ sub retrieve_card {
 
     my $req =
       HTTP::Request->new( POST =>
-"http://kanbanize.com/index.php/api/kanbanize/get_task_details/boardid/$BOARD_ID/taskid/$card_id/format/json"
+"http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/get_task_details/boardid/$BOARD_ID/taskid/$card_id/format/json"
       );
       
     $req->header( "Content-Length" => "0" );  
@@ -452,7 +453,7 @@ sub sync_card {
 
     if ( $bug_summary ne $card_summary ) {
         update_card_summary( $card, $bug_summary );
-        push @updated, "Updated card summary";
+        push @updated, "Updated card summary ('$bug_summary' vs '$card_summary')";
     }
 
     # Check status
@@ -522,7 +523,7 @@ sub complete_card {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://kanbanize.com/index.php/api/kanbanize/move_task/format/json"
+          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/move_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -558,7 +559,7 @@ sub update_card_extlink {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://kanbanize.com/index.php/api/kanbanize/edit_task/format/json"
+          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -620,10 +621,12 @@ sub update_card_summary {
 
     my $taskid = $card->{taskid};
 
+
+
     my $data = {
         boardid => $BOARD_ID,
         taskid  => $taskid,
-        title   => $bug_summary,
+        title   => URI::Escape::uri_escape($bug_summary),
     };
 
     if($DRYRUN) {
@@ -633,7 +636,7 @@ sub update_card_summary {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://kanbanize.com/index.php/api/kanbanize/edit_task/format/json"
+          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -661,7 +664,7 @@ sub update_card_assigned {
 
     my $req =
       HTTP::Request->new( POST =>
-"http://kanbanize.com/index.php/api/kanbanize/edit_task/format/json/boardid/$BOARD_ID/taskid/$taskid/assignee/$assignee"
+"http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json/boardid/$BOARD_ID/taskid/$taskid/assignee/$assignee"
       );
 
     $req->content("[]");
@@ -686,12 +689,26 @@ sub update_whiteboard {
       HTTP::Request->new(
         PUT => "https://bugzilla.mozilla.org/rest/bug/$bugid" );
 
+    # Clear kanban request
     if ( $whiteboard =~ m/\[kanban:$WHITEBOARD_TAG\]/ ) {
         $whiteboard =~ s/\[kanban:$WHITEBOARD_TAG\]//;
     }
+    
+    # Clear unqualified whiteboard
+    if ( $whiteboard =~ m{\[kanban:https://kanbanize.com/ctrl_board/\d+/\d+\]} ) {
+	$whiteboard =~ s{\[kanban:https://kanbanize.com/ctrl_board/\d+/\d+\]}{};
+    }
+    
+    # Clear old qualified whiteboards
+    
+    if ($whiteboard =~ m{kanban:$WHITEBOARD_TAG:https://kanbanize.com/ctrl_board/\d+/\d+} ) {
+    	$whiteboard =~ s{kanban:$WHITEBOARD_TAG:https://kanbanize.com/ctrl_board/\d+/\d+}{};
+    }
+    
+    
 
     $whiteboard =
-      "[kanban:$WHITEBOARD_TAG:https://kanbanize.com/ctrl_board/$BOARD_ID/$cardid] $whiteboard";
+      "[kanban:https://$WHITEBOARD_TAG.kanbanize.com/ctrl_board/$BOARD_ID/$cardid] $whiteboard";
 
     $req->content("whiteboard=$whiteboard&token=$BUGZILLA_TOKEN");
 
@@ -737,14 +754,14 @@ sub create_card {
     }
 
     my $data = {
-        'title'   => "$bug->{id} - $bug->{summary}",
+        'title'   => URI::Escape::uri_escape("$bug->{id} - $bug->{summary}"),
         'extlink' => "https://bugzilla.mozilla.org/show_bug.cgi?id=$bug->{id}",
         'boardid' => $BOARD_ID,
     };
 
     my $req =
       HTTP::Request->new( POST =>
-"http://kanbanize.com/index.php/api/kanbanize/create_new_task/format/json"
+"http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/create_new_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -783,7 +800,7 @@ sub move_card {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://kanbanize.com/index.php/api/kanbanize/move_task/format/json"
+          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/move_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -833,7 +850,7 @@ sub parse_whiteboard {
         $card = { taskid => $cardid };
     }
     elsif ( $whiteboard =~
-        m{\[kanban:$WHITEBOARD_TAG:https://kanbanize.com/ctrl_board/(\d+)/(\d+)\]} )
+        m{\[kanban:https://$WHITEBOARD_TAG.kanbanize.com/ctrl_board/(\d+)/(\d+)\]} )
     {
         my $boardid = $1;
         my $cardid  = $2;
