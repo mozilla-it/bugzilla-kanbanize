@@ -919,11 +919,11 @@ sub kanbanid_to_bugmail {
 }
 
 sub api_encode_title ($) {
-    my $title = $_[0];
+    my $title = shift;
     # Kanbanize requires a backslash to be present within the title value.
-    $_[0] =~ s/\"/\\\"/g;
+    $title =~ s/\"/\\\"/g;
     # Kanbanize requires URI escaping of only the title, but no other elements.
-    $_[0] = URI::Escape::uri_escape($title);
+    $title = URI::Escape::uri_escape($title);
     return $title;
 }
 
