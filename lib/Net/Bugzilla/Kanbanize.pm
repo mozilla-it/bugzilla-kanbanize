@@ -626,7 +626,7 @@ sub update_card_summary {
     my $data = {
         boardid => $BOARD_ID,
         taskid  => $taskid,
-        title   => URI::Escape::uri_escape($bug_summary),
+        title   => api_encode_title($bug_summary),
     };
 
     if($DRYRUN) {
@@ -754,7 +754,7 @@ sub create_card {
     }
 
     my $data = {
-        'title'   => URI::Escape::uri_escape("$bug->{id} - $bug->{summary}"),
+        'title'   => api_encode_title("$bug->{id} - $bug->{summary}"),
         'extlink' => "https://bugzilla.mozilla.org/show_bug.cgi?id=$bug->{id}",
         'boardid' => $BOARD_ID,
     };
@@ -916,6 +916,15 @@ sub kanbanid_to_bugmail {
   }
   
   return $bugmail;
+}
+
+sub api_encode_title ($) {
+    my $title = $_[0];
+    # Kanbanize requires a backslash to be present within the title value.
+    $_[0] =~ s/\"/\\\"/g;
+    # Kanbanize requires URI escaping of only the title, but no other elements.
+    $_[0] = URI::Escape::uri_escape($title);
+    return $title;
 }
 
 1;
