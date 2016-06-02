@@ -116,6 +116,73 @@ sub run {
 use URI;
 use URI::QueryParam;
 
+sub get_bug_history {
+    my($bug) = @_;
+
+    die "Invalid bug number" unless $bug =~ /^\d+$/;
+
+    my $uri = URI->new("https://bugzilla.mozilla.org/rest/bug/$bug/history");
+    $uri->query_param(token => $BUGZILLA_TOKEN);
+
+    my $req = HTTP::Request->new( GET => $uri );
+
+    my $res = $ua->request($req);
+
+    if ( !$res->is_success ) {
+        die Dumper($res);    #$res->status_line;
+    }
+
+    my $data = decode_json( $res->decoded_content );
+
+    my $results = [];
+
+    # If this fails, we didn't get a bug history for whatever reason. Oh well.
+    eval {
+        for my $h (@{ $data->{'bugs'} }) {
+            next unless $h->{'id'} eq $bug;
+            if (@{ $h->{'history'} } > 0) {
+                $results = $h->{'history'};
+            }
+        }
+    };
+    # XXX: Lazily assuming that no data and bad data are equivalent and okay here.
+    #warn "$@" if $@;
+
+    return $results;
+}
+
+sub get_bug_history_latest {
+    my($bug, $field) = @_;
+
+    die "Invalid bug number" unless $bug =~ /^\d+$/;
+    die "Invalid field name" unless $field =~ /^\S+$/;
+
+    my $history = get_bug_history($bug);
+
+    my @timestamps = ();
+
+    for my $entry (@{ $history }) {
+        my $changes = $entry->{'changes'};
+        my $found = 0;
+        for my $change (@{$changes}) {
+            next unless $change->{'field_name'} eq $field;
+            $found = 1;
+            last;
+        }
+        next unless $found;
+        push @timestamps, $entry->{'when'};
+    }
+
+    # stop if we didn't find any history entries
+    return undef unless @timestamps > 0;
+
+    # sorts times of the format "2015-04-17T20:45:07Z" oldest to newest.
+    @timestamps = sort @timestamps;
+
+    # return the newest timestamp.
+    return $timestamps[-1];
+}
+
 sub get_bugs {
     my $uri = URI->new("https://bugzilla.mozilla.org/rest/bug");
 
@@ -368,7 +435,7 @@ sub retrieve_card {
         return $all_cards->{$card_id};
     }
 
-    my $data = {
+    my $params = {
         history => "yes",
         event   => "update",
     };
@@ -378,7 +445,7 @@ sub retrieve_card {
 "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/get_task_details/boardid/$BOARD_ID/taskid/$card_id/format/json"
       );
 
-    $req->content( encode_json($data) );
+    $req->content( encode_json($params) );
 
     my $res = $ua->request($req);
 
