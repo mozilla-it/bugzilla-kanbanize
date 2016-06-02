@@ -47,6 +47,8 @@ sub version {
 
 #XXX: Wrong, need to be instance variables
 
+my $all_cards;
+
 my $APIKEY;
 my $BOARD_ID;
 my $BUGZILLA_TOKEN;
@@ -318,8 +320,6 @@ sub get_marked_bugs {
 
     return @bugs;
 }
-
-my $all_cards;
 
 sub get_bugs_from_all_cards {
 
