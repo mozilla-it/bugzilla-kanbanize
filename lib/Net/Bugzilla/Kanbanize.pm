@@ -176,7 +176,40 @@ sub get_bug_history_latest {
     }
 
     # stop if we didn't find any history entries
-    return undef unless @timestamps > 0;
+    return '' unless @timestamps > 0;
+
+    # sorts times of the format "2015-04-17T20:45:07Z" oldest to newest.
+    @timestamps = sort @timestamps;
+
+    # return the newest timestamp.
+    return $timestamps[-1];
+}
+
+sub get_card_history_latest {
+    my($card, $bugid) = @_;
+
+    my $cardid = $card->{'taskid'};
+
+    # The cache is populated by get_all_tasks, which doesn't have access to history data.
+    # So we need to clear the cache and re-fetch the card, to get its history.
+    delete ${ $all_cards }{$cardid};
+
+    $card = retrieve_card($cardid, $bugid);
+
+    my $history = $card->{'historydetails'};
+
+    my @timestamps = ();
+
+    for my $change (@{ $history }) {
+        next unless $change->{'historyevent'} =~ /assignee/i;
+        my $entrydate = $change->{'entrydate'};
+        $entrydate =~ s/^(....-..-..) (..:..:..)$/$1T$2Z/;
+        die "Unable to post-process entrydate from kanbanize" unless $entrydate =~ /^....-..-..T..:..:..Z$/;
+        push @timestamps, $entrydate;
+    }
+
+    # stop if we didn't find any history entries
+    return '' unless @timestamps > 0;
 
     # sorts times of the format "2015-04-17T20:45:07Z" oldest to newest.
     @timestamps = sort @timestamps;
@@ -487,12 +520,20 @@ sub sync_card {
         die Dumper( $bug, $card );
     }
 
+    # Set this to 'update' if the assignees are out of sync.
+    # We'll decide which way to sync using history timestamps.
+    my($assignee_task) = 'none';
+
     if (   defined $card_assigned
         && $card_assigned ne "None"
         && $card_assigned ne 'nobody'
         && !assigned_bugzilla_email($bug_assigned)
     )
     {
+        # The card is assigned, the bug is not.
+        # Perhaps we need to update the bug to match the card.
+        $assignee_task = 'update';
+
         my $error = update_bug_assigned( $bug, $card_assigned );
 
         if (!$error) {
@@ -504,7 +545,6 @@ sub sync_card {
     elsif ( ($bug_assigned ne $card_assigned_bugmail)
         && assigned_bugzilla_email($bug_assigned) )
     {
-
         my $kanbanid = bugmail_to_kanbanid($bug_assigned);
         my $bugmail = kanbanid_to_bugmail($kanbanid);
 
@@ -512,11 +552,41 @@ sub sync_card {
             $log->warn("[bug $bug->{id}] Bugmail user $bug_assigned not mapped to a kanban user, skipping assigned checks");
         }
         else {
+            # The bug is assigned, the card doesn't match.
+            # Perhaps we need to update the card to match the bug.
+            $assignee_task = 'update';
+
               push @updated, "Update card assigned to $kanbanid";
               #print STDERR
               # "bug_asigned: $bug_assigned card_assigned: $card_assigned\n";
               update_card_assigned( $card, $bug_assigned );
         }
+    }
+
+    # Do we need to update assignees?
+    if ($assignee_task eq 'update') {
+        # Find out when the card and the bug were last updated.
+        my $time_bug = get_bug_history_latest($bug->{id}, 'assigned_to');
+        my $time_card = get_card_history_latest($card, $bug->{id});
+
+        if ($time_bug eq $time_card) {
+            # This is incredibly unlikely to occur, but if it does, we'll assume the bug is correct.
+            $assignee_task = 'update_bug';
+        } else {
+            # We have two different times. Figure out which one is newer and use it.
+            my @times = ($time_bug, $time_card);
+            @times = sort @times;
+
+            if ($times[-1] eq $time_bug) {
+                # The bug was updated more recently. Update the card to reflect the bug.
+                $assignee_task = 'update_card';
+            } else {
+                # The card was updated more recently. Update the bug to reflect the card.
+                $assignee_task = 'update_bug';
+            }
+        }
+
+        #$log->warn(sprintf("bug << %s >> card << %s >> task << %s >>", $bug->{id}, $card->{taskid}, $assignee_task));
     }
 
     #Check summary (XXX: Formatting assumption here)
