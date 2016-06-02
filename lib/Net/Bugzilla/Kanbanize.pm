@@ -556,10 +556,10 @@ sub sync_card {
             # Perhaps we need to update the card to match the bug.
             $assignee_task = 'update';
 
-              push @updated, "Update card assigned to $kanbanid";
-              #print STDERR
-              # "bug_asigned: $bug_assigned card_assigned: $card_assigned\n";
-              update_card_assigned( $card, $bug_assigned );
+            push @updated, "Update card assigned to $kanbanid";
+            #print STDERR
+            # "bug_asigned: $bug_assigned card_assigned: $card_assigned\n";
+            update_card_assigned( $card, $bug_assigned );
         }
     }
 
