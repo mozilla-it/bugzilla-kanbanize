@@ -368,12 +368,17 @@ sub retrieve_card {
         return $all_cards->{$card_id};
     }
 
+    my $data = {
+        history => "yes",
+        event   => "update",
+    };
+
     my $req =
       HTTP::Request->new( POST =>
 "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/get_task_details/boardid/$BOARD_ID/taskid/$card_id/format/json"
       );
 
-    $req->header( "Content-Length" => "0" );  
+    $req->content( encode_json($data) );
 
     my $res = $ua->request($req);
 
