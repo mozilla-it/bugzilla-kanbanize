@@ -533,11 +533,7 @@ sub complete_card {
     if ( !$res->is_success ) {
         my $content = $res->content;
         my $status  = $res->status_line;
-        if ($content) {
-
-        } else {
-            $log->warn(Dumper($res));    #$res->status_line;
-        }
+        $log->warn("Kanban API request failed (closing $taskid): $status <<< $content >>>");
     }
 }
 
