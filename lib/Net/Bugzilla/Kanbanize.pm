@@ -505,8 +505,43 @@ sub reopen_card {
     return;
 }
 
+sub unblock_card {
+    my $card = shift;
+
+    my $taskid = $card->{taskid};
+
+    my $data = {
+        boardid => $BOARD_ID,
+        taskid  => $taskid,
+        event   => 'unblock',
+    };
+
+    if ($DRYRUN) {
+      $log->debug("unblock card");
+      return;
+    }
+
+    my $req =
+      HTTP::Request->new( POST =>
+          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/block_task/format/json"
+      );
+
+    $req->content( encode_json($data) );
+
+    my $res = $ua->request($req);
+
+    if ( !$res->is_success ) {
+        my $content = $res->content;
+        my $status  = $res->status_line;
+        $log->warn("Kanban API request failed while unblocking card #$taskid: $status <<< $content >>>");
+    }
+}
+
 sub complete_card {
     my $card = shift;
+
+    # First, unblock the card, so that we can move it.
+    unblock_card($card);
 
     my $taskid = $card->{taskid};
 
