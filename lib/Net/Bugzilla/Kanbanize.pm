@@ -744,6 +744,49 @@ sub update_card_extlink {
     }
 }
 
+sub reset_bug_assigned {
+    my ( $bug ) = @_;
+
+    my $bugid = $bug->{id};
+
+    if ($DRYRUN) {
+      $log->debug( "Resetting bug assigned to" );
+      return;
+    }
+
+    my $req =
+      HTTP::Request->new(
+        PUT => "https://bugzilla.mozilla.org/rest/bug/$bugid" );
+
+    $req->content("reset_assigned_to=true&token=$BUGZILLA_TOKEN");
+
+    my $res = $ua->request($req);
+
+    if ( !$res->is_success ) {
+        my $ct = $res->content_type;
+
+        if ($ct eq 'application/json') {
+            my $error;
+
+            eval {
+                $error = decode_json($res->content);
+            };
+
+            if (ref($error) eq 'HASH') {
+                my $code = $error->{code};
+                my $error_message = $error->{message};
+                $log->error("Error no=$code talking to bugzilla: $error_message");
+                return;
+            }
+        }
+
+
+        die Dumper($res);    #$res->status_line;
+    }
+
+    return $res->is_success;
+}
+
 sub update_bug_assigned {
     my ( $bug, $assigned ) = @_;
 
