@@ -533,14 +533,6 @@ sub sync_card {
         # The card is assigned, the bug is not.
         # Perhaps we need to update the bug to match the card.
         $assignee_task = 'update';
-
-        my $error = update_bug_assigned( $bug, $card_assigned );
-
-        if (!$error) {
-            $error = "**FAILED**";
-        }
-
-        push @updated, "Update bug $bug->{id} assigned to $card_assigned $error";
     }
     elsif ( ($bug_assigned ne $card_assigned_bugmail)
         && assigned_bugzilla_email($bug_assigned) )
@@ -555,11 +547,6 @@ sub sync_card {
             # The bug is assigned, the card doesn't match.
             # Perhaps we need to update the card to match the bug.
             $assignee_task = 'update';
-
-            push @updated, "Update card assigned to $kanbanid";
-            #print STDERR
-            # "bug_asigned: $bug_assigned card_assigned: $card_assigned\n";
-            update_card_assigned( $card, $bug_assigned );
         }
     }
 
@@ -580,9 +567,35 @@ sub sync_card {
             if ($times[-1] eq $time_bug) {
                 # The bug was updated more recently. Update the card to reflect the bug.
                 $assignee_task = 'update_card';
+
+                push @updated, "Update card assigned to $bug_assigned";
+                #print STDERR
+                # "bug_asigned: $bug_assigned card_assigned: $card_assigned\n";
+                update_card_assigned( $card, $bug_assigned );
             } else {
                 # The card was updated more recently. Update the bug to reflect the card.
                 $assignee_task = 'update_bug';
+
+                # Was the card assigned to someone, or unassigned to nobody?
+                if ($card_assigned eq 'None' || $card_assigned eq 'nobody') {
+                    # It was unassigned. Reset the bug to its default assignee.
+                    my $error = reset_bug_assigned($bug);
+
+                    if (!$error) {
+                        $error = "**FAILED**";
+                    }
+
+                    push @updated, "Reset bug $bug->{id} assigned $error";
+                } else {
+                    # It was assigned. Update the bug to reflect this.
+                    my $error = update_bug_assigned($bug, $card_assigned);
+
+                    if (!$error) {
+                        $error = "**FAILED**";
+                    }
+
+                    push @updated, "Update bug $bug->{id} assigned to $card_assigned $error";
+                }
             }
         }
 
