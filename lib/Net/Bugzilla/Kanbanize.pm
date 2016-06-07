@@ -484,19 +484,25 @@ sub sync_bug {
 
         my $found_cardid = find_card_for_bugid($bug->{id});
         if ( defined $found_cardid ) {
-            $log->warn("Bug $bug->{id} already has a card $found_cardid");
+            $card = retrieve_card($found_cardid, $bug->{id});
+
+            $log->warn("Bug $bug->{id} already has a card $found_cardid, updating whiteboard");
+
+            update_whiteboard($bug->{id}, $found_cardid, $whiteboard);
+
+            push @changes, "[bug updated]";
+        } else {
+            $card = create_card($bug);
+
+            if ( not $card ) {
+                $log->warn("Failed to create card for bug $bug->{id}");
+                return;
+            }
+
+            update_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
+
+            push @changes, "[card created]";
         }
-
-        $card = create_card($bug);
-
-        if ( not $card ) {
-            $log->warn("Failed to create card for bug $bug->{id}");
-            return;
-        }
-
-        update_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
-
-        push @changes, "[card created]";
     }
 
     my $new_card = retrieve_card( $card->{taskid}, $bug->{id} );
