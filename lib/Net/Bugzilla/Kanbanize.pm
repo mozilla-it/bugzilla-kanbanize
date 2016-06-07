@@ -1157,8 +1157,13 @@ sub bugmail_to_kanbanid {
   if (exists $BUGMAIL_TO_KANBANID{$bugmail}) {
     $kanbanid = $BUGMAIL_TO_KANBANID{$bugmail};
   }
-  else {
+  elsif ($bugmail =~ /\@mozilla.com$/) {
     ( $kanbanid = $bugmail ) =~ s/\@.*//;
+  }
+  else {
+    $kanbanid = 'None';
+
+    $log->warn("Unable to convert bugmail $bugmail to a valid kanbanid, resorting to 'None'.");
   }
 
   return $kanbanid;
