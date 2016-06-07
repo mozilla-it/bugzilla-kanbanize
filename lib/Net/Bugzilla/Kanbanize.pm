@@ -106,6 +106,8 @@ sub run {
 
     $log->debug("Found a total of $count bugs");
 
+    find_mislinked_bugs( \%bugs );
+
     $total = 0;
 
     while ( my ( $bugid, $bug ) = each %bugs ) {
@@ -113,6 +115,34 @@ sub run {
     }
 
     return 1;
+}
+
+sub find_mislinked_bugs {
+    my($bugs) = @_;
+
+    # whiteboard link -> [ bug, bug, ... ]
+    my %whiteboards = ();
+
+    while ( my( $bugid, $bug ) = each %{ $bugs } ) {
+        # convert the bug into a card, if it exists.
+        my $card = parse_whiteboard($bug->{whiteboard});
+        if (defined $card) {
+            # we only need the cardid for this check.
+            my $cardid = $card->{cardid};
+            if ($cardid) {
+                # set it up to be an array, if it isn't one already.
+                $whiteboards{$cardid} ||= [];
+                # append the bug we found to the array.
+                push(@{ $whiteboards{cardid} }, $bugid);
+            }
+        }
+    }
+
+    while ( my( $cardid, $bugids ) = each %whiteboards ) {
+        if (@{ $bugids } > 1) {
+            $log->warn("Card $cardid is referenced by whiteboards on multiple bugs: " . join(', ', @{ $bugids }));
+        }
+    }
 }
 
 use URI;
