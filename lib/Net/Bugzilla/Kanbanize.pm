@@ -107,6 +107,7 @@ sub run {
     $log->debug("Found a total of $count bugs");
 
     find_mislinked_bugs( \%bugs );
+    find_mislinked_cards();
 
     $total = 0;
 
@@ -141,6 +142,25 @@ sub find_mislinked_bugs {
     while ( my( $cardid, $bugids ) = each %whiteboards ) {
         if (@{ $bugids } > 1) {
             $log->warn("Card $cardid is referenced by whiteboards on multiple bugs: " . join(', ', @{ $bugids }));
+        }
+    }
+}
+
+sub find_mislinked_cards {
+    # whiteboard link -> [ bug, bug, ... ]
+    my %extlinks = ();
+
+    while ( my( $cardid, $card ) = each %{ $all_cards } ) {
+        my $extlink = $card->{extlink};
+        if (defined($extlink) && $extlink =~ /show_bug.cgi.*id=(\d+)$/) {
+            $extlinks{$1} ||= [];
+            push(@{ $extlinks{$1} }, $cardid);
+        }
+    }
+
+    while ( my( $bugid, $cardids ) = each %extlinks ) {
+        if (@{ $cardids } > 1) {
+            $log->warn("Bug $bugid is referenced by extlinks on multiple cards: " . join(', ', @{ $cardids }));
         }
     }
 }
