@@ -146,6 +146,19 @@ sub find_mislinked_bugs {
     }
 }
 
+sub find_card_for_bugid {
+    my($bugid) = @_;
+
+    for my $cardid (sort { $a <=> $b } keys %{ $all_cards }) {
+        my $extlink = $all_cards->{$cardid}->{extlink};
+        if (defined($extlink) && $extlink =~ /show_bug.cgi.*id=$bugid$/) {
+            return $cardid;
+        }
+    }
+
+    return undef;
+}
+
 sub find_mislinked_cards {
     # whiteboard link -> [ bug, bug, ... ]
     my %extlinks = ();
@@ -467,6 +480,11 @@ sub sync_bug {
             # This is a bug that came from a card but without a matching whiteboard...
             $log->warn("Bug $bug->{id} came from a card, but whiteboard is empty");
             return;
+        }
+
+        my $found_cardid = find_card_for_bugid($bug->{id});
+        if ( defined $found_cardid ) {
+            $log->warn("Bug $bug->{id} already has a card $found_cardid");
         }
 
         $card = create_card($bug);
