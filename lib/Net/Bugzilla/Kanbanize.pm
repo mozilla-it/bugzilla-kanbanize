@@ -146,6 +146,19 @@ sub find_mislinked_bugs {
     }
 }
 
+sub find_card_for_bugid {
+    my($bugid) = @_;
+
+    for my $cardid (sort { $a <=> $b } keys %{ $all_cards }) {
+        my $extlink = $all_cards->{$cardid}->{extlink};
+        if (defined($extlink) && $extlink =~ /show_bug.cgi.*id=$bugid$/) {
+            return $cardid;
+        }
+    }
+
+    return undef;
+}
+
 sub find_mislinked_cards {
     # whiteboard link -> [ bug, bug, ... ]
     my %extlinks = ();
@@ -469,16 +482,27 @@ sub sync_bug {
             return;
         }
 
-        $card = create_card($bug);
+        my $found_cardid = find_card_for_bugid($bug->{id});
+        if ( defined $found_cardid ) {
+            $card = retrieve_card($found_cardid, $bug->{id});
 
-        if ( not $card ) {
-            $log->warn("Failed to create card for bug $bug->{id}");
-            return;
+            $log->warn("Bug $bug->{id} already has a card $found_cardid, updating whiteboard");
+
+            update_whiteboard($bug->{id}, $found_cardid, $whiteboard);
+
+            push @changes, "[bug updated]";
+        } else {
+            $card = create_card($bug);
+
+            if ( not $card ) {
+                $log->warn("Failed to create card for bug $bug->{id}");
+                return;
+            }
+
+            update_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
+
+            push @changes, "[card created]";
         }
-
-        update_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
-
-        push @changes, "[card created]";
     }
 
     my $new_card = retrieve_card( $card->{taskid}, $bug->{id} );
