@@ -695,8 +695,10 @@ sub unblock_card {
 sub complete_card {
     my $card = shift;
 
-    # First, unblock the card, so that we can move it.
-    unblock_card($card);
+    if ($card->{blocked} == 1) {
+        # First, unblock the card, so that we can move it.
+        unblock_card($card);
+    }
 
     my $taskid = $card->{taskid};
 
