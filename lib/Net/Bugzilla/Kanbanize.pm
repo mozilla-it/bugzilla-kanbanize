@@ -502,11 +502,21 @@ sub sync_bug {
         #
         if ($bug->{source} eq 'card') {
             # If all three of these conditions are true, then we assume the bug is not meant
-            # to be watched in Kanban, and refuse to populate the whiteboard.
-            #
-            # Improvements to this logic are pending, but not yet ready. See also:
-            # https://github.com/mozilla-it/bugzilla-kanbanize/issues/9
-            $log->warn("Bug $bug->{id} came from a card, but whiteboard is empty");
+            # to be watched in Kanban, and complete all open cards that reference it.
+            my $found_unclosed_cards = 0;
+            for my $cardid (@{ $bug->{sourceids} }) {
+                my $card = retrieve_card($cardid, $bug->{id});
+                if ($card->{columnname} ne 'Done' && $card->{columnname} ne 'Archive') {
+                    $found_unclosed_cards++;
+                    if ($found_unclosed_cards == 1) {
+                        $log->warn("Bug $bug->{id} came from an open card, but whiteboard is empty; closing the associated card(s).");
+                    }
+                    complete_card($card);
+                    my $change = "[closed card $cardid for departed bug $bug->{id}]";
+                    $log->info(sprintf "[%4d/%4d] Card %4d - Bug %8d - [%s] %s ** %s **",
+                      $total, $count, $cardid, $bug->{id}, $bug->{source}, $summary, $change);
+                }
+            }
             return;
         }
         # Otherwise, the source is either 'argv' or 'cc' or 'search'. Onward to whiteboard.
