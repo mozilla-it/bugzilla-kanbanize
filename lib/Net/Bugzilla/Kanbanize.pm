@@ -362,7 +362,7 @@ sub fill_missing_bugs_info {
 
     foreach my $bug ( sort @found_bugs ) {
         $bugs->{ $bug->{id} } = $bug;
-        $bugs->{ $bug->{id} }{source} = $;
+        $bugs->{ $bug->{id} }{source} = $source;
     }
 
     return;
