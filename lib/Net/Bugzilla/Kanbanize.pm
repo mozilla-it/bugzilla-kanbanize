@@ -137,12 +137,12 @@ sub find_mislinked_bugs {
         my $card = parse_whiteboard($bug->{whiteboard});
         if (defined $card) {
             # we only need the cardid for this check.
-            my $cardid = $card->{cardid};
+            my $cardid = $card->{taskid};
             if ($cardid) {
                 # set it up to be an array, if it isn't one already.
                 $whiteboards{$cardid} ||= [];
                 # append the bug we found to the array.
-                push(@{ $whiteboards{cardid} }, $bugid);
+                push(@{ $whiteboards{$cardid} }, $bugid);
             }
         }
     }
