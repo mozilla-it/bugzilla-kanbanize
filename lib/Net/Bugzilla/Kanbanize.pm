@@ -476,11 +476,24 @@ sub sync_bug {
 
     my @changes;
     if ( not defined $card ) {
+
+        # For the source to be 'card' here, the bug has to have traversed a series of logic
+        # steps to reach this point:
+        #
+        # - a card must have an extlink to the bug
+        # - the bug must not be returned by the watched components search
+        # - the bug must not have a cc: of the kanban watch user.
+        #
         if ($bug->{source} eq 'card') {
-            # This is a bug that came from a card but without a matching whiteboard...
+            # If all three of these conditions are true, then we assume the bug is not meant
+            # to be watched in Kanban, and refuse to populate the whiteboard.
+            #
+            # Improvements to this logic are pending, but not yet ready. See also:
+            # https://github.com/mozilla-it/bugzilla-kanbanize/issues/9
             $log->warn("Bug $bug->{id} came from a card, but whiteboard is empty");
             return;
         }
+        # Otherwise, the source is either 'argv' or 'cc' or 'search'. Onward to whiteboard.
 
         my $found_cardid = find_card_for_bugid($bug->{id});
         if ( defined $found_cardid ) {
