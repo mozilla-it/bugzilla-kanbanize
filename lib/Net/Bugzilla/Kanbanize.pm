@@ -1220,7 +1220,7 @@ sub bugmail_to_kanbanid {
   else {
     $kanbanid = 'None';
 
-    $log->warn("Unable to convert bugmail $bugmail to a valid kanbanid, resorting to 'None'.");
+    $log->debug("Unable to convert bugmail $bugmail to a valid kanbanid, resorting to 'None'.");
   }
 
   return $kanbanid;
