@@ -96,7 +96,15 @@ sub run {
     my %bugs;
 
     if (@ARGV) {
-        fill_missing_bugs_info( "argv", \%bugs, @ARGV );
+        # fill_missing_bugs_info() needs to know the sourceid of each bugid.
+        # This isn't really necessary for @ARGV, but we conform anyways.
+        my %sourcemap = ();
+        for (0..$#ARGV) {
+            $sourcemap{$_} = $ARGV[$_];
+        }
+
+        # Go fetch all these bugs and ensure we process them.
+        fill_missing_bugs_info( "argv", \%bugs, \%sourcemap );
     }
     else {
         %bugs = get_bugs();
@@ -305,6 +313,7 @@ sub get_bugs {
     foreach my $bug ( @{ $data->{bugs} } ) {
         $bugs{ $bug->{id} } = $bug;
         $bugs{ $bug->{id} }{source} = "search";
+        $bugs{ $bug->{id} }{sourceids} = [];
     }
 
     my @marked = get_marked_bugs();
@@ -312,6 +321,7 @@ sub get_bugs {
     foreach my $bug (@marked) {
         $bugs{ $bug->{id} } = $bug;
         $bugs{ $bug->{id} }{source} = "marked";
+        $bugs{ $bug->{id} }{sourceids} = [];
     }
 
     my @cced = get_cced_bugs();
@@ -319,31 +329,36 @@ sub get_bugs {
     foreach my $bug (@cced) {
         $bugs{ $bug->{id} } = $bug;
         $bugs{ $bug->{id} }{source} = "cc";
+        $bugs{ $bug->{id} }{sourceids} = [];
     }
 
-    my @cards = get_bugs_from_all_cards();
+    my $cards = get_bugs_from_all_cards();
 
-    fill_missing_bugs_info( "card", \%bugs, @cards );
+    fill_missing_bugs_info( "card", \%bugs, $cards );
 
     return %bugs;
 }
 
 sub fill_missing_bugs_info {
-    my ( $source, $bugs, @bugs ) = @_;
+    my ( $source, $bugs, $sourcemap ) = @_;
 
-    my @missing_bugs;
+    my %bug_to_source;
 
-    foreach my $bugid (@bugs) {
-        if ( not exists $bugs->{$bugid} ) {
-            push @missing_bugs, $bugid;
+    for my $sourceid (sort keys %{ $sourcemap }) {
+        my $bugid = $sourcemap->{$sourceid};
+        if (exists $bugs->{$bugid}) {
+            delete $sourcemap->{$sourceid};
+        } else {
+            $bug_to_source{$bugid} ||= [];
+            push(@{ $bug_to_source{$bugid} }, $sourceid);
         }
     }
 
-    if (not @missing_bugs) {
-      return;
+    unless (keys %{ $sourcemap } > 0) {
+        return;
     }
 
-    my $missing_bugs_ids = join ",", sort @missing_bugs;
+    my $missing_bugs_ids = join(",", uniq sort values %{ $sourcemap });
 
     my $url = "https://bugzilla.mozilla.org/rest/bug?token=$BUGZILLA_TOKEN&include_fields=id,status,whiteboard,summary,assigned_to&id=$missing_bugs_ids";
 
@@ -363,6 +378,7 @@ sub fill_missing_bugs_info {
     foreach my $bug ( sort @found_bugs ) {
         $bugs->{ $bug->{id} } = $bug;
         $bugs->{ $bug->{id} }{source} = $source;
+        $bugs->{ $bug->{id} }{sourceids} = $bug_to_source{ $bug->{id} };
     }
 
     return;
@@ -434,7 +450,7 @@ sub get_bugs_from_all_cards {
 
     my $cards = decode_json( $res->decoded_content );
 
-    my @bugs;
+    my %found_cards;
     foreach my $card (@$cards) {
         # Skip archived cards
         if ($card->{columnname} eq 'Archive') {
@@ -445,11 +461,11 @@ sub get_bugs_from_all_cards {
         my $extlink = $card->{extlink};    # XXX: Smarter parsing
         if ( $extlink =~ /(\d+)$/ ) {
             my $bugid = $1;
-            push @bugs, $bugid;
+            $found_cards{ $card->{taskid} } = $bugid;
         }
     }
 
-    return @bugs;
+    return \%found_cards;
 }
 
 sub sync_bug {
