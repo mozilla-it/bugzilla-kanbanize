@@ -150,6 +150,58 @@ sub find_mislinked_bugs {
     while ( my( $cardid, $bugids ) = each %whiteboards ) {
         if (@{ $bugids } > 1) {
             $log->warn("Card $cardid is referenced by whiteboards on multiple bugs: " . join(', ', @{ $bugids }));
+
+            # Plan to create a new card for each of these bugs.
+            my %multiple_bugs = map { $_ => 1 } @{ $bugids };
+
+            # However, if the card references one of these bugs, leave that one bug alone.
+            my $extlink = $all_cards->{$cardid}->{extlink};
+            if (defined($extlink)) {
+                # The card has an extlink. Check of the bugs.
+                for my $bugid (sort keys %multiple_bugs) {
+                    # Does this bugid match the card?
+                    if ($extlink =~ /show_bug.cgi.*id=$bugid$/) {
+                        # It does! Delete it from the list of bugs to get new cards.
+                        $log->warn("Card $cardid is already correctly associated with bug $bugid");
+                        delete $multiple_bugs{$bugid};
+                        last;
+                    }
+                }
+            }
+
+            # Assign a new card to each of the bugs left after the above logic is done.
+            for my $bugid (uniq sort keys %multiple_bugs) {
+                my $bug = $bugs->{$bugid};
+
+                my $found_cardid = find_card_for_bugid($bugid);
+                if ($found_cardid) {
+                    my $found_card = retrieve_card($found_cardid);
+
+                    if ( not $found_card ) {
+                        $log->warn("Failed to load existing card for bug $bug->{id} card $found_cardid");
+                        return;
+                    }
+
+                    $bug->{whiteboard} = update_whiteboard( $bug->{id}, $found_card->{taskid}, $bug->{whiteboard} );
+
+                    my $change = "[assigned existing card $found_card->{taskid} to bug $bug->{id} replacing conflicted card $cardid]";
+                    $log->info(sprintf "Card %4d - Bug %8d - [%s] %s ** %s **",
+                      $found_card->{taskid}, $bug->{id}, $bug->{source}, $bug->{summary}, $change);
+                } else {
+                    my $new_card = create_card($bug);
+
+                    if ( not $new_card ) {
+                        $log->warn("Failed to create new card for bug $bug->{id}");
+                        return;
+                    }
+
+                    $bug->{whiteboard} = update_whiteboard( $bug->{id}, $new_card->{taskid}, $bug->{whiteboard} );
+
+                    my $change = "[assigned new card $new_card->{taskid} to bug $bug->{id} replacing conflicted card $cardid]";
+                    $log->info(sprintf "Card %4d - Bug %8d - [%s] %s ** %s **",
+                      $new_card->{taskid}, $bug->{id}, $bug->{source}, $bug->{summary}, $change);
+                }
+            }
         }
     }
 }
@@ -1069,6 +1121,7 @@ sub update_whiteboard {
         die $res->status_line;
     }
 
+    return $whiteboard;
 }
 
 sub clear_whiteboard {
