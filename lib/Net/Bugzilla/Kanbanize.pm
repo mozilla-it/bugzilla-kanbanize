@@ -1049,10 +1049,17 @@ sub update_whiteboard {
         $whiteboard =~ s{kanban:$WHITEBOARD_TAG:https://kanbanize.com/ctrl_board/\d+/\d+}{};
     }
 
+    # Clear new qualified whiteboards
 
+    if ($whiteboard =~ m{\[kanban:https://$WHITEBOARD_TAG.kanbanize.com/ctrl_board/\d+/\d+\]\s*} ) {
+        $whiteboard =~ s{\[kanban:https://$WHITEBOARD_TAG.kanbanize.com/ctrl_board/\d+/\d+\]\s*}{};
+    }
 
     $whiteboard =
       "[kanban:https://$WHITEBOARD_TAG.kanbanize.com/ctrl_board/$BOARD_ID/$cardid] $whiteboard";
+
+    # General whitespace cleanup, so that we don't pollute the whiteboard too much.
+    $whiteboard =~ s/\s+$//;
 
     $req->content("whiteboard=$whiteboard&token=$BUGZILLA_TOKEN");
 
