@@ -223,6 +223,7 @@ sub find_mislinked_cards {
     my %extlinks = ();
 
     while ( my( $cardid, $card ) = each %{ $all_cards } ) {
+        next if $card->{columnname} eq 'Archive';
         my $extlink = $card->{extlink};
         if (defined($extlink) && $extlink =~ /show_bug.cgi.*id=(\d+)$/) {
             $extlinks{$1} ||= [];
