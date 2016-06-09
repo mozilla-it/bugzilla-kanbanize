@@ -335,7 +335,7 @@ sub get_card_history {
 }
 
 sub get_card_history_latest {
-    my($card) = @_;
+    my($card, $field) = @_;
 
     $card = get_card_history($card);
 
@@ -346,7 +346,7 @@ sub get_card_history_latest {
     my @timestamps = ();
 
     for my $change (@{ $history }) {
-        next unless $change->{'historyevent'} =~ /assignee/i;
+        next unless $change->{'historyevent'} =~ /$field/i;
         my $entrydate = $change->{'entrydate'};
         $entrydate =~ s/^(....-..-..) (..:..:..)$/$1T$2Z/;
         die "Unable to post-process entrydate from kanbanize" unless $entrydate =~ /^....-..-..T..:..:..Z$/;
@@ -657,7 +657,6 @@ sub retrieve_card {
 
     my $params = {
         history => "yes",
-        event   => "update",
     };
 
     my $req =
@@ -737,7 +736,7 @@ sub sync_card {
     if ($assignee_task eq 'update') {
         # Find out when the card and the bug were last updated.
         my $time_bug = get_bug_history_latest($bug->{id}, 'assigned_to');
-        my $time_card = get_card_history_latest($card);
+        my $time_card = get_card_history_latest($card, 'assignee');
 
         if ($time_bug eq $time_card) {
             # This is incredibly unlikely to occur, but if it does, we'll assume the bug is correct.
