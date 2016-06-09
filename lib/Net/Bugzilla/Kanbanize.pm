@@ -308,16 +308,38 @@ sub get_bug_history_latest {
     return $timestamps[-1];
 }
 
+sub refresh_card {
+    my($card) = @_;
+
+    # We'll need the cardid to refresh this.
+    my($cardid) = $card->{taskid};
+
+    # Remove this card from the cache.
+    delete ${ $all_cards }{$cardid};
+
+    # Re-fetch the card.
+    return retrieve_card($cardid, 0);
+}
+
+sub get_card_history {
+    my($card) = @_;
+
+    # Ensure that we've fetched the history for this card, if it isn't already cached.
+    unless (exists $card->{'historydetails'}) {
+        # The cache is populated by get_all_tasks, which doesn't have access to history data.
+        # So we need to clear the cache and re-fetch the card, to get its history.
+        $card = refresh_card($card);
+    }
+
+    return $card;
+}
+
 sub get_card_history_latest {
     my($card, $bugid) = @_;
 
+    $card = get_card_history($card);
+
     my $cardid = $card->{'taskid'};
-
-    # The cache is populated by get_all_tasks, which doesn't have access to history data.
-    # So we need to clear the cache and re-fetch the card, to get its history.
-    delete ${ $all_cards }{$cardid};
-
-    $card = retrieve_card($cardid, $bugid);
 
     my $history = $card->{'historydetails'};
 
