@@ -48,6 +48,7 @@ sub version {
 #XXX: Wrong, need to be instance variables
 
 my $all_cards;
+my %bugs;
 
 my $APIKEY;
 my $BOARD_ID;
@@ -92,8 +93,6 @@ sub run {
     $ua->timeout(15);
     $ua->env_proxy;
     $ua->default_header( 'apikey' => $APIKEY );
-
-    my %bugs;
 
     if (@ARGV) {
         # fill_missing_bugs_info() needs to know the sourceid of each bugid.
@@ -207,16 +206,35 @@ sub find_mislinked_bugs {
 }
 
 sub find_card_for_bugid {
-    my($bugid) = @_;
+    my($bugid, $skip_archived) = @_;
+
+    my $bug = $bugs{$bugid};
+
+    # If we find an archived card, store it in case we can't find any other card.
+    my $found_archived;
 
     for my $cardid (sort { $a <=> $b } keys %{ $all_cards }) {
-        my $extlink = $all_cards->{$cardid}->{extlink};
+        my $card = $all_cards->{$cardid};
+        my $extlink = $card->{extlink};
         if (defined($extlink) && $extlink =~ /show_bug.cgi.*id=$bugid$/) {
-            return $cardid;
+            if ($card->{columnname} eq 'Archive') {
+                # Record the oldest archived card we find, but keep searching.
+                $found_archived ||= $card;
+            } else {
+                # We found a non-archived card. Return it, since that's great.
+                return $cardid;
+            }
         }
     }
 
-    return undef;
+    # If we reached this point, either we found no cards or an archived card.
+    if ($skip_archived) {
+        # We aren't supposed to return any archived cards we found, so return undef.
+        return undef;
+    } else {
+        # We return either the first archived card we found, or undef if none found.
+        return $found_archived;
+    }
 }
 
 sub find_mislinked_cards {
@@ -224,6 +242,7 @@ sub find_mislinked_cards {
     my %extlinks = ();
 
     while ( my( $cardid, $card ) = each %{ $all_cards } ) {
+        next if $card->{columnname} eq 'Archive';
         my $extlink = $card->{extlink};
         if (defined($extlink) && $extlink =~ /show_bug.cgi.*id=(\d+)$/) {
             $extlinks{$1} ||= [];
@@ -308,23 +327,48 @@ sub get_bug_history_latest {
     return $timestamps[-1];
 }
 
-sub get_card_history_latest {
-    my($card, $bugid) = @_;
+sub refresh_card {
+    my($card) = @_;
 
-    my $cardid = $card->{'taskid'};
+    # We'll need the cardid to refresh this.
+    my($cardid) = $card->{taskid};
 
-    # The cache is populated by get_all_tasks, which doesn't have access to history data.
-    # So we need to clear the cache and re-fetch the card, to get its history.
+    # Remove this card from the cache.
     delete ${ $all_cards }{$cardid};
 
-    $card = retrieve_card($cardid, $bugid);
+    # Re-fetch the card.
+    return retrieve_card($cardid, 0);
+}
+
+sub load_card_history {
+    my($card) = @_;
+
+    # Ensure that we've fetched the history for this card, if it isn't already cached.
+    unless (exists $card->{'historydetails'}) {
+        # The cache is populated by get_all_tasks, which doesn't have access to history data.
+        # So we need to clear the cache and re-fetch the card, to get its history.
+        $card = refresh_card($card);
+    }
+
+    return $card;
+}
+
+sub get_card_history_latest {
+    my($card, $field, $details) = @_;
+
+    $card = load_card_history($card);
+
+    my $cardid = $card->{'taskid'};
 
     my $history = $card->{'historydetails'};
 
     my @timestamps = ();
 
     for my $change (@{ $history }) {
-        next unless $change->{'historyevent'} =~ /assignee/i;
+        next unless $change->{'historyevent'} =~ /$field/i;
+        if (defined($details)) {
+            next unless $change->{'details'} =~ /$details/;
+        }
         my $entrydate = $change->{'entrydate'};
         $entrydate =~ s/^(....-..-..) (..:..:..)$/$1T$2Z/;
         die "Unable to post-process entrydate from kanbanize" unless $entrydate =~ /^....-..-..T..:..:..Z$/;
@@ -345,7 +389,7 @@ sub get_bugs {
     my $uri = URI->new("https://bugzilla.mozilla.org/rest/bug");
 
     $uri->query_param(token => $BUGZILLA_TOKEN);
-    $uri->query_param(include_fields => qw(id status whiteboard summary assigned_to));
+    $uri->query_param(include_fields => qw(id status whiteboard summary assigned_to creation_time));
     $uri->query_param(bug_status => qw(NEW UNCONFIRMED REOPENED ASSIGNED));
     $uri->query_param(product => @PRODUCTS);
     $uri->query_param(component => @COMPONENTS);
@@ -504,10 +548,6 @@ sub get_bugs_from_all_cards {
 
     my %found_cards;
     foreach my $card (@$cards) {
-        # Skip archived cards
-        if ($card->{columnname} eq 'Archive') {
-            next;
-        }
         $all_cards->{ $card->{taskid} } = $card;
 
         my $extlink = $card->{extlink};    # XXX: Smarter parsing
@@ -635,7 +675,6 @@ sub retrieve_card {
 
     my $params = {
         history => "yes",
-        event   => "update",
     };
 
     my $req =
@@ -662,10 +701,6 @@ sub retrieve_card {
     $all_cards->{$card_id} = $data;
 
     return $all_cards->{$card_id};
-}
-
-sub sync_bugzilla {
-
 }
 
 sub sync_card {
@@ -719,7 +754,7 @@ sub sync_card {
     if ($assignee_task eq 'update') {
         # Find out when the card and the bug were last updated.
         my $time_bug = get_bug_history_latest($bug->{id}, 'assigned_to');
-        my $time_card = get_card_history_latest($card, $bug->{id});
+        my $time_card = get_card_history_latest($card, 'assignee');
 
         if ($time_bug eq $time_card) {
             # This is incredibly unlikely to occur, but if it does, we'll assume the bug is correct.
@@ -776,36 +811,6 @@ sub sync_card {
         push @updated, "Updated card summary ('$bug_summary' vs '$card_summary')";
     }
 
-    # Check status
-    my $bug_status  = $bug->{status};
-    my $card_status = $card->{columnname};
-
-    # Close card on bug completion
-
-   #warn "[$bug->{id}] bug: $bug_status card: $card_status" if $config->verbose;
-
-    if ( ( $bug_status eq "RESOLVED" or $bug_status eq "VERIFIED" )
-        and $card_status ne "Done" )
-    {
-        complete_card($card);
-        push @updated, "Card completed";
-    }
-
-    # XXX: Should we close bug on card completion?
-    if ( ( $bug_status ne "RESOLVED" and $bug_status ne "VERIFIED" )
-        and $card_status eq "Done" )
-    {
-        if ( $bug_status eq "REOPENED" ) {
-            reopen_card($card);
-
-            #$updated++;
-        }
-        else {
-            # If it's in webops, close it, otherwise, skip it ?
-            $log->warn("Bug $bug->{id} is not RESOLVED ($bug_status) but card $card->{taskid} says $card_status");
-        }
-    }
-
     # Check extlink
     my $bug_link = "https://bugzilla.mozilla.org/show_bug.cgi?id=$bug->{id}";
 
@@ -814,13 +819,151 @@ sub sync_card {
         push @updated, "Updated external link to bugzilla ( $card->{extlink} => $bug_link)";
     }
 
+    # Check status
+    my $bug_status  = $bug->{status};
+    my $card_status = $card->{columnname};
+
+    # Close card on bug completion
+
+    # When we're done here, each of these will be either open or closed.
+    my %sync_status = (
+        bug  => undef,
+        card => undef,
+    );
+
+    # Distill all the various complexity down to 'open' or 'closed'.
+    $sync_status{bug} = ($bug_status =~ /^(RESOLVED|VERIFIED)$/) ? 'closed' : 'open';
+    $sync_status{card} = ($card_status =~ /^(Done|Archive)$/) ? 'closed' : 'open';
+
+    # Are they both open or closed?
+    if ($sync_status{bug} ne $sync_status{card}) {
+        # Nope.
+        $log->warn("bug $bug->{id} ($sync_status{bug}) and card $card->{taskid} ($sync_status{card}) disagree");
+
+        # We need to know when each of these objects was either opened or closed.
+        my %sync_lastmod = ();
+
+        # Load the card history.
+        $card = load_card_history($card);
+
+        # Whether the bug is open or closed, we only need to know the last time
+        # its status changed.
+        $sync_lastmod{bug} = get_bug_history_latest($bug->{id}, 'status');
+        $sync_lastmod{bug} ||= $bug->{creation_time};
+
+        # Whether the card is open or closed, we only need to know when it was
+        # last moved to/from Done/Archive.  The API doesn't give us any hint of
+        # columnname or rowname, but the latest move *is* correct. This is fine.
+        $sync_lastmod{card} = get_card_history_latest($card, "moved", "(?:from|to) '(?:Done|Archive)'");
+        $sync_lastmod{card} ||= get_card_history_latest($card, "task created");
+
+        # Identify whether the bug or card was modified most recently.
+        my $lastmod;
+
+        # Make sure they have the same timetamps.
+        if ($sync_lastmod{bug} eq $sync_lastmod{card}) {
+            # This almost never happens. Assume the bug is correct.
+            $lastmod = 'bug';
+        } else {
+            # Sort the timestamp labels from oldest to newest.
+            my @timestamps = sort { $sync_lastmod{$a} cmp $sync_lastmod{$b} } ('bug', 'card');
+            # Pick the newest label.
+            $lastmod = $timestamps[-1];
+        }
+
+        # Reality check.
+        die "invalid lastmod decision" unless defined $lastmod;
+
+        $log->warn("This conflict should be resolved in favor of $lastmod ($sync_status{$lastmod}).");
+
+        # Which side should we replicate the current status from?
+        if ($lastmod eq 'bug') {
+            $log->warn("Bug was modified more recently than Card.");
+            if ($sync_status{'bug'} eq 'open') {
+                # Bug is open. Open the card.
+                $log->warn("Bug is open. Open the card.");
+                reopen_card($card, $bug);
+            } else {
+                # Bug is closed. Close the card.
+                $log->warn("Bug is closed. Close the card.");
+                complete_card($card);
+                my $change = "[closed card $card->{taskid} for departed bug $bug->{id}]";
+                $log->info(sprintf "Card %4d - Bug %8d - [%s] %s ** %s **",
+                  $card->{taskid}, $bug->{id}, $bug->{source}, $bug->{summary}, $change);
+            }
+        } else {
+            $log->warn("Card was modified more recently than Bug.");
+            if ($sync_status{'card'} eq 'open') {
+                # Card is open. Open the bug.
+                $log->warn("Card is open. Open the bug.");
+                reopen_bug($bug, $card);
+            } else {
+                # Card is closed. Close the bug.
+                $log->warn("Card is closed. Close the bug.");
+                resolve_bug($bug, $card);
+            }
+        }
+    }
+
     return @updated;
 }
 
-sub reopen_card {
-    my $card = shift;
+sub reopen_bug {
+    my($bug, $card) = @_;
 
-    $log->warn("[notimplemented] Should be reopening card $card->{taskid} and moving back to ready");
+    update_bug_status($bug, "REOPENED");
+
+    my $change = "[reopened bug $bug->{id} for card $card->{taskid}]";
+    $log->info(sprintf "Card %4d - Bug %8d - [%s] %s ** %s **",
+      $card->{taskid}, $bug->{id}, $bug->{source}, $bug->{summary}, $change);
+}
+sub resolve_bug {
+    my($bug, $card) = @_;
+
+    update_bug_status($bug, "RESOLVED", "FIXED");
+
+    my $change = "[resolved (fixed) bug $bug->{id} for card $card->{taskid}]";
+    $log->info(sprintf "Card %4d - Bug %8d - [%s] %s ** %s **",
+      $card->{taskid}, $bug->{id}, $bug->{source}, $bug->{summary}, $change);
+}
+
+sub reopen_card {
+    my($card, $bug) = @_;
+
+    if ($card->{columnname} eq 'Done') {
+        move_card( $card, $KANBANIZE_INCOMING );
+
+        my $change = "[reopened card $card->{taskid} bug $bug->{id}]";
+        $log->info(sprintf "Card %4d - Bug %8d - [%s] %s ** %s **",
+          $card->{taskid}, $bug->{id}, $bug->{source}, $bug->{summary}, $change);
+    } else {
+        my($new_card, $source);
+
+        # Either reusing an existing card ID, or create a new card.
+        $new_card = find_card_for_bugid($bug->{id}, 1);
+
+        # Did we find a card ID?
+        if (defined($new_card)) {
+            # Yes. Convert the card ID to a card object.
+            $new_card = retrieve_card($new_card);
+            $source = 'reused';
+        } else {
+            # No. Create a new card object.
+            $new_card = create_card($bug);
+            $source = 'created';
+        }
+
+        if ( not $new_card ) {
+            $log->warn("Failed to find/create new card to reopen archived card $card->{taskid}");
+            return;
+        }
+
+        $bug->{whiteboard} = update_whiteboard( $bug->{id}, $new_card->{taskid}, $bug->{whiteboard} );
+
+        my $change = "[$source card $new_card->{taskid} bug $bug->{id} to reopen archived card $card->{taskid}]";
+        $log->info(sprintf "Card %4d - Bug %8d - [%s] %s ** %s **",
+          $new_card->{taskid}, $bug->{id}, $bug->{source}, $bug->{summary}, $change);
+    }
 
     return;
 }
@@ -922,6 +1065,54 @@ sub update_card_extlink {
     if ( !$res->is_success ) {
         die Dumper($res);    #$res->status_line;
     }
+}
+
+sub update_bug_status {
+    my ( $bug, $status, $resolution ) = @_;
+
+    my $bugid = $bug->{id};
+
+    if ($DRYRUN) {
+      $log->debug( "Resetting bug assigned to" );
+      return;
+    }
+
+    my $req =
+      HTTP::Request->new(
+        PUT => "https://bugzilla.mozilla.org/rest/bug/$bugid" );
+
+    my $content = "status=$status&token=$BUGZILLA_TOKEN";
+
+    if ($status =~ /^(?:RESOLVED|VERIFIED|CLOSED)$/) {
+        $content .= "&resolution=$resolution";
+    }
+
+    $req->content($content);
+
+    my $res = $ua->request($req);
+
+    if ( !$res->is_success ) {
+        my $ct = $res->content_type;
+
+        if ($ct eq 'application/json') {
+            my $error;
+
+            eval {
+                $error = decode_json($res->content);
+            };
+
+            if (ref($error) eq 'HASH') {
+                my $code = $error->{code};
+                my $error_message = $error->{message};
+                $log->error("Error no=$code talking to bugzilla: $error_message");
+                return;
+            }
+        }
+
+        die Dumper($res);    #$res->status_line;
+    }
+
+    return $res->is_success;
 }
 
 sub reset_bug_assigned {
