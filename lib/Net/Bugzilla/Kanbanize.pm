@@ -206,7 +206,7 @@ sub find_mislinked_bugs {
 }
 
 sub find_card_for_bugid {
-    my($bugid) = @_;
+    my($bugid, $skip_archived) = @_;
 
     my $bug = $bugs{$bugid};
 
@@ -218,17 +218,23 @@ sub find_card_for_bugid {
         my $extlink = $card->{extlink};
         if (defined($extlink) && $extlink =~ /show_bug.cgi.*id=$bugid$/) {
             if ($card->{columnname} eq 'Archive') {
-                # Keep the oldest archived card we find, just in case.
+                # Record the oldest archived card we find, but keep searching.
                 $found_archived ||= $card;
             } else {
+                # We found a non-archived card. Return it, since that's great.
                 return $cardid;
             }
         }
     }
 
-    # If we reached this point, either we found an archived card, or we didn't
-    # find any cards at all. Return that result, as either a card or as undef.
-    return $found_archived;
+    # If we reached this point, either we found no cards or an archived card.
+    if ($skip_archived) {
+        # We aren't supposed to return any archived cards we found, so return undef.
+        return undef;
+    } else {
+        # We return either the first archived card we found, or undef if none found.
+        return $found_archived;
+    }
 }
 
 sub find_mislinked_cards {
