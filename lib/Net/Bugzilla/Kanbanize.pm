@@ -335,7 +335,7 @@ sub load_card_history {
 }
 
 sub get_card_history_latest {
-    my($card, $field) = @_;
+    my($card, $field, $details) = @_;
 
     $card = load_card_history($card);
 
@@ -347,6 +347,9 @@ sub get_card_history_latest {
 
     for my $change (@{ $history }) {
         next unless $change->{'historyevent'} =~ /$field/i;
+        if (defined($details)) {
+            next unless $change->{'details'} =~ /$details/;
+        }
         my $entrydate = $change->{'entrydate'};
         $entrydate =~ s/^(....-..-..) (..:..:..)$/$1T$2Z/;
         die "Unable to post-process entrydate from kanbanize" unless $entrydate =~ /^....-..-..T..:..:..Z$/;
