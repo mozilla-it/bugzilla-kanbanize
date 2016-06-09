@@ -802,7 +802,7 @@ sub sync_card {
         }
         else {
             # If it's in webops, close it, otherwise, skip it ?
-            $log->warn("Bug $bug->{id} is not RESOLVED ($bug_status) but card $card->{taskid} says $card_status");
+            $log->warn("[notimplemented] Bug $bug->{id} is not RESOLVED ($bug_status) but card $card->{taskid} says $card_status");
         }
     }
 
