@@ -896,11 +896,11 @@ sub sync_card {
             if ($sync_status{'card'} eq 'open') {
                 # Card is open. Open the bug.
                 $log->warn("Card is open. Open the bug.");
-                reopen_bug($bug);
+                reopen_bug($bug, $card);
             } else {
                 # Card is closed. Close the bug.
                 $log->warn("Card is closed. Close the bug.");
-                resolve_bug($bug);
+                resolve_bug($bug, $card);
             }
         }
     }
@@ -909,14 +909,22 @@ sub sync_card {
 }
 
 sub reopen_bug {
-    my($bug) = @_;
+    my($bug, $card) = @_;
 
-    $log->warn("[notimplemented] Should be reopening bug $bug->{id}");
+    update_bug_status($bug, "REOPENED");
+
+    my $change = "[reopened bug $bug->{id} for card $card->{taskid}]";
+    $log->info(sprintf "Card %4d - Bug %8d - [%s] %s ** %s **",
+      $card->{taskid}, $bug->{id}, $bug->{source}, $bug->{summary}, $change);
 }
 sub resolve_bug {
-    my($bug) = @_;
+    my($bug, $card) = @_;
 
-    $log->warn("[notimplemented] Should be resolving bug $bug->{id}");
+    update_bug_status($bug, "RESOLVED", "FIXED");
+
+    my $change = "[resolved (fixed) bug $bug->{id} for card $card->{taskid}]";
+    $log->info(sprintf "Card %4d - Bug %8d - [%s] %s ** %s **",
+      $card->{taskid}, $bug->{id}, $bug->{source}, $bug->{summary}, $change);
 }
 
 sub reopen_card {
@@ -1057,6 +1065,54 @@ sub update_card_extlink {
     if ( !$res->is_success ) {
         die Dumper($res);    #$res->status_line;
     }
+}
+
+sub update_bug_status {
+    my ( $bug, $status, $resolution ) = @_;
+
+    my $bugid = $bug->{id};
+
+    if ($DRYRUN) {
+      $log->debug( "Resetting bug assigned to" );
+      return;
+    }
+
+    my $req =
+      HTTP::Request->new(
+        PUT => "https://bugzilla.mozilla.org/rest/bug/$bugid" );
+
+    my $content = "status=$status&token=$BUGZILLA_TOKEN";
+
+    if ($status =~ /^(?:RESOLVED|VERIFIED|CLOSED)$/) {
+        $content .= "&resolution=$resolution";
+    }
+
+    $req->content($content);
+
+    my $res = $ua->request($req);
+
+    if ( !$res->is_success ) {
+        my $ct = $res->content_type;
+
+        if ($ct eq 'application/json') {
+            my $error;
+
+            eval {
+                $error = decode_json($res->content);
+            };
+
+            if (ref($error) eq 'HASH') {
+                my $code = $error->{code};
+                my $error_message = $error->{message};
+                $log->error("Error no=$code talking to bugzilla: $error_message");
+                return;
+            }
+        }
+
+        die Dumper($res);    #$res->status_line;
+    }
+
+    return $res->is_success;
 }
 
 sub reset_bug_assigned {
