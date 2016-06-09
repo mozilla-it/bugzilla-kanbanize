@@ -548,10 +548,6 @@ sub get_bugs_from_all_cards {
 
     my %found_cards;
     foreach my $card (@$cards) {
-        # Skip archived cards
-        if ($card->{columnname} eq 'Archive') {
-            next;
-        }
         $all_cards->{ $card->{taskid} } = $card;
 
         my $extlink = $card->{extlink};    # XXX: Smarter parsing
@@ -835,10 +831,13 @@ sub sync_card {
         card => undef,
     );
 
+    # Distill all the various complexity down to 'open' or 'closed'.
     $sync_status{bug} = ($bug_status =~ /^(RESOLVED|VERIFIED)$/) ? 'closed' : 'open';
     $sync_status{card} = ($card_status =~ /^(Done|Archive)$/) ? 'closed' : 'open';
 
+    # Are they both open or closed?
     if ($sync_status{bug} ne $sync_status{card}) {
+        # Nope.
         $log->warn("bug $bug->{id} ($sync_status{bug}) and card $card->{taskid} ($sync_status{card}) disagree");
 
         # We need to know when each of these objects was either opened or closed.
@@ -883,53 +882,41 @@ sub sync_card {
             if ($sync_status{'bug'} eq 'open') {
                 # Bug is open. Open the card.
                 $log->warn("Bug is open. Open the card.");
-                # TODO: We ought to take action here, but not yet.
+                reopen_card($card);
             } else {
                 # Bug is closed. Close the card.
                 $log->warn("Bug is closed. Close the card.");
-                # TODO: We ought to take action here, but not yet.
+                complete_card($card);
+                my $change = "[closed card $card->{taskid} for departed bug $bug->{id}]";
+                $log->info(sprintf "Card %4d - Bug %8d - [%s] %s ** %s **",
+                  $card->{taskid}, $bug->{id}, $bug->{source}, $bug->{summary}, $change);
             }
         } else {
             $log->warn("Card was modified more recently than Bug.");
             if ($sync_status{'card'} eq 'open') {
                 # Card is open. Open the bug.
                 $log->warn("Card is open. Open the bug.");
-                # TODO: We ought to take action here, but not yet.
+                reopen_bug($bug);
             } else {
                 # Card is closed. Close the bug.
                 $log->warn("Card is closed. Close the bug.");
-                # TODO: We ought to take action here, but not yet.
+                resolve_bug($bug);
             }
         }
     }
 
-   #warn "[$bug->{id}] bug: $bug_status card: $card_status" if $config->verbose;
-
-    if ( ( $bug_status eq "RESOLVED" or $bug_status eq "VERIFIED" )
-        and $card_status ne "Done" )
-    {
-        complete_card($card);
-        push @updated, "Card completed";
-    }
-
-    # XXX: Should we close bug on card completion?
-    if ( ( $bug_status ne "RESOLVED" and $bug_status ne "VERIFIED" )
-        and $card_status eq "Done" )
-    {
-        if ( $bug_status eq "REOPENED" ) {
-            reopen_card($card);
-
-            #$updated++;
-        }
-        else {
-            # If it's in webops, close it, otherwise, skip it ?
-            $log->warn("[notimplemented] Bug $bug->{id} is not RESOLVED ($bug_status) but card $card->{taskid} says $card_status");
-        }
-    }
-
-
-
     return @updated;
+}
+
+sub reopen_bug {
+    my($bug) = @_;
+
+    $log->warn("[notimplemented] Should be reopening bug $bug->{id}");
+}
+sub resolve_bug {
+    my($bug) = @_;
+
+    $log->warn("[notimplemented] Should be resolving bug $bug->{id}");
 }
 
 sub reopen_card {
