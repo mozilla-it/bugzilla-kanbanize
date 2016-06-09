@@ -664,10 +664,6 @@ sub retrieve_card {
     return $all_cards->{$card_id};
 }
 
-sub sync_bugzilla {
-
-}
-
 sub sync_card {
     my ( $card, $bug ) = @_;
 
