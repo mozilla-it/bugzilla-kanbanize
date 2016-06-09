@@ -321,7 +321,7 @@ sub refresh_card {
     return retrieve_card($cardid, 0);
 }
 
-sub get_card_history {
+sub load_card_history {
     my($card) = @_;
 
     # Ensure that we've fetched the history for this card, if it isn't already cached.
@@ -337,7 +337,7 @@ sub get_card_history {
 sub get_card_history_latest {
     my($card, $field) = @_;
 
-    $card = get_card_history($card);
+    $card = load_card_history($card);
 
     my $cardid = $card->{'taskid'};
 
