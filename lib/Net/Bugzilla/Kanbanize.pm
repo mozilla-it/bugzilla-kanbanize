@@ -48,6 +48,7 @@ sub version {
 #XXX: Wrong, need to be instance variables
 
 my $all_cards;
+my %bugs;
 
 my $APIKEY;
 my $BOARD_ID;
@@ -92,8 +93,6 @@ sub run {
     $ua->timeout(15);
     $ua->env_proxy;
     $ua->default_header( 'apikey' => $APIKEY );
-
-    my %bugs;
 
     if (@ARGV) {
         # fill_missing_bugs_info() needs to know the sourceid of each bugid.
