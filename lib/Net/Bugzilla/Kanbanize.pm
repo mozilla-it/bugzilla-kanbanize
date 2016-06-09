@@ -796,6 +796,14 @@ sub sync_card {
         push @updated, "Updated card summary ('$bug_summary' vs '$card_summary')";
     }
 
+    # Check extlink
+    my $bug_link = "https://bugzilla.mozilla.org/show_bug.cgi?id=$bug->{id}";
+
+    if ( $card->{extlink} ne $bug_link ) {
+        update_card_extlink( $card, $bug_link );
+        push @updated, "Updated external link to bugzilla ( $card->{extlink} => $bug_link)";
+    }
+
     # Check status
     my $bug_status  = $bug->{status};
     my $card_status = $card->{columnname};
@@ -900,13 +908,7 @@ sub sync_card {
         }
     }
 
-    # Check extlink
-    my $bug_link = "https://bugzilla.mozilla.org/show_bug.cgi?id=$bug->{id}";
 
-    if ( $card->{extlink} ne $bug_link ) {
-        update_card_extlink( $card, $bug_link );
-        push @updated, "Updated external link to bugzilla ( $card->{extlink} => $bug_link)";
-    }
 
     return @updated;
 }
