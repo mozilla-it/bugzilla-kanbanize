@@ -802,6 +802,80 @@ sub sync_card {
 
     # Close card on bug completion
 
+    # When we're done here, each of these will be either open or closed.
+    my %sync_status = (
+        bug  => undef,
+        card => undef,
+    );
+
+    $sync_status{bug} = ($bug_status =~ /^(RESOLVED|VERIFIED)$/) ? 'closed' : 'open';
+    $sync_status{card} = ($card_status =~ /^(Done|Archive)$/) ? 'closed' : 'open';
+
+    if ($sync_status{bug} ne $sync_status{card}) {
+        $log->warn("bug $bug->{id} ($sync_status{bug}) and card $card->{taskid} ($sync_status{card}) disagree");
+
+        # We need to know when each of these objects was either opened or closed.
+        my %sync_lastmod = ();
+
+        # Load the card history.
+        $card = load_card_history($card);
+
+        # Whether the bug is open or closed, we only need to know the last time
+        # its status changed.
+        $sync_lastmod{bug} = get_bug_history_latest($bug->{id}, 'status');
+        $sync_lastmod{bug} ||= $bug->{creation_time};
+
+        # Whether the card is open or closed, we only need to know when it was
+        # last moved to/from Done/Archive.  The API doesn't give us any hint of
+        # columnname or rowname, but the latest move *is* correct. This is fine.
+        $sync_lastmod{card} = get_card_history_latest($card, "moved", "(?:from|to) '(?:Done|Archive)'");
+        $sync_lastmod{card} ||= get_card_history_latest($card, "task created");
+
+        # Identify whether the bug or card was modified most recently.
+        my $lastmod;
+
+        # Make sure they have the same timetamps.
+        if ($sync_lastmod{bug} eq $sync_lastmod{card}) {
+            # This almost never happens. Assume the bug is correct.
+            $lastmod = 'bug';
+        } else {
+            # Sort the timestamp labels from oldest to newest.
+            my @timestamps = sort { $sync_lastmod{$a} cmp $sync_lastmod{$b} } ('bug', 'card');
+            # Pick the newest label.
+            $lastmod = $timestamps[-1];
+        }
+
+        # Reality check.
+        die "invalid lastmod decision" unless defined $lastmod;
+
+        $log->warn("This conflict should be resolved in favor of $lastmod ($sync_status{$lastmod}).");
+
+        # Which side should we replicate the current status from?
+        if ($lastmod eq 'bug') {
+            $log->warn("Bug was modified more recently than Card.");
+            if ($sync_status{'bug'} eq 'open') {
+                # Bug is open. Open the card.
+                $log->warn("Bug is open. Open the card.");
+                # TODO: We ought to take action here, but not yet.
+            } else {
+                # Bug is closed. Close the card.
+                $log->warn("Bug is closed. Close the card.");
+                # TODO: We ought to take action here, but not yet.
+            }
+        } else {
+            $log->warn("Card was modified more recently than Bug.");
+            if ($sync_status{'card'} eq 'open') {
+                # Card is open. Open the bug.
+                $log->warn("Card is open. Open the bug.");
+                # TODO: We ought to take action here, but not yet.
+            } else {
+                # Card is closed. Close the bug.
+                $log->warn("Card is closed. Close the bug.");
+                # TODO: We ought to take action here, but not yet.
+            }
+        }
+    }
+
    #warn "[$bug->{id}] bug: $bug_status card: $card_status" if $config->verbose;
 
     if ( ( $bug_status eq "RESOLVED" or $bug_status eq "VERIFIED" )
