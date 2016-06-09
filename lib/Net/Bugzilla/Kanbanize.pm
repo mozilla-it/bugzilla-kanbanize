@@ -370,7 +370,7 @@ sub get_bugs {
     my $uri = URI->new("https://bugzilla.mozilla.org/rest/bug");
 
     $uri->query_param(token => $BUGZILLA_TOKEN);
-    $uri->query_param(include_fields => qw(id status whiteboard summary assigned_to));
+    $uri->query_param(include_fields => qw(id status whiteboard summary assigned_to creation_time));
     $uri->query_param(bug_status => qw(NEW UNCONFIRMED REOPENED ASSIGNED));
     $uri->query_param(product => @PRODUCTS);
     $uri->query_param(component => @COMPONENTS);
