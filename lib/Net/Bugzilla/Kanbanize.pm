@@ -882,7 +882,7 @@ sub sync_card {
             if ($sync_status{'bug'} eq 'open') {
                 # Bug is open. Open the card.
                 $log->warn("Bug is open. Open the card.");
-                reopen_card($card);
+                reopen_card($card, $bug);
             } else {
                 # Bug is closed. Close the card.
                 $log->warn("Bug is closed. Close the card.");
@@ -920,9 +920,42 @@ sub resolve_bug {
 }
 
 sub reopen_card {
-    my $card = shift;
+    my($card, $bug) = @_;
 
-    $log->warn("[notimplemented] Should be reopening card $card->{taskid} and moving back to ready");
+    if ($card->{columnname} eq 'Done') {
+        move_card( $card, $KANBANIZE_INCOMING );
+
+        my $change = "[reopened card $card->{taskid} bug $bug->{id}]";
+        $log->info(sprintf "Card %4d - Bug %8d - [%s] %s ** %s **",
+          $card->{taskid}, $bug->{id}, $bug->{source}, $bug->{summary}, $change);
+    } else {
+        my($new_card, $source);
+
+        # Either reusing an existing card ID, or create a new card.
+        $new_card = find_card_for_bugid($bug->{id}, 1);
+
+        # Did we find a card ID?
+        if (defined($new_card)) {
+            # Yes. Convert the card ID to a card object.
+            $new_card = retrieve_card($new_card);
+            $source = 'reused';
+        } else {
+            # No. Create a new card object.
+            $new_card = create_card($bug);
+            $source = 'created';
+        }
+
+        if ( not $new_card ) {
+            $log->warn("Failed to find/create new card to reopen archived card $card->{taskid}");
+            return;
+        }
+
+        $bug->{whiteboard} = update_whiteboard( $bug->{id}, $new_card->{taskid}, $bug->{whiteboard} );
+
+        my $change = "[$source card $new_card->{taskid} bug $bug->{id} to reopen archived card $card->{taskid}]";
+        $log->info(sprintf "Card %4d - Bug %8d - [%s] %s ** %s **",
+          $new_card->{taskid}, $bug->{id}, $bug->{source}, $bug->{summary}, $change);
+    }
 
     return;
 }
