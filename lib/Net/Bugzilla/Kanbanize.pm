@@ -656,6 +656,38 @@ sub sync_bug {
 
     $card = $new_card;
 
+    # Check the card extlink, if one is present, and make sure that it references the correct bug.
+    my($referenced_bug) = ($card->{extlink} =~ /show_bug.cgi.*id=(\d+)$/);
+    if (defined($referenced_bug) && $referenced_bug ne $bug->{id}) {
+        $log->warn("Bug $bug->{id} references card $card->{taskid} which references bug $referenced_bug, assigning bug $bug->{id} a new card.");
+
+        my $found_cardid = find_card_for_bugid($bug->{id});
+        if ( defined $found_cardid ) {
+            # We found a usable (non-archived) card referencing this bug, so reuse it.
+            $card = retrieve_card($found_cardid, $bug->{id});
+
+            $log->warn("Bug $bug->{id} already has a card $found_cardid, updating whiteboard");
+
+            update_whiteboard($bug->{id}, $found_cardid, $whiteboard);
+
+            push @changes, "[bug updated]";
+        } else {
+            # We did not find a usable (non-archived) card referencing this bug, so open a new one.
+            $log->warn("Bug $bug->{id} whiteboard << $whiteboard >> references an unknown (or archived) card, creating a new card");
+
+            $card = create_card($bug);
+
+            if ( not $card ) {
+                $log->warn("Failed to create card for bug $bug->{id}");
+                return;
+            }
+
+            update_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
+
+            push @changes, "[card created]";
+        }
+    }
+
     # Assuming we didn't just create a new card, we need to sync the existing card to match the bug.
     if (@changes > 0 && $changes[-1] !~ /card created/) {
 
