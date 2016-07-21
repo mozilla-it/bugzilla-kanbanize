@@ -592,6 +592,10 @@ sub sync_bug {
         # - the bug must not be returned by the watched components search
         # - the bug must not have a cc: of the kanban watch user.
         #
+        if (defined($whiteboard) && length($whiteboard) > 0) {
+            $log->debug("Bug $bug->{id} whiteboard << $whiteboard >> did not resolve to a card.") if $config->verbose;
+        }
+
         if ($bug->{source} eq 'card') {
             # If all three of these conditions are true, then we assume the bug is not meant
             # to be watched in Kanban, and complete all open cards that reference it.
@@ -615,6 +619,7 @@ sub sync_bug {
 
         my $found_cardid = find_card_for_bugid($bug->{id});
         if ( defined $found_cardid ) {
+            # We found a usable (non-archived) card referencing this bug, so reuse it.
             $card = retrieve_card($found_cardid, $bug->{id});
 
             $log->warn("Bug $bug->{id} already has a card $found_cardid, updating whiteboard");
@@ -623,6 +628,9 @@ sub sync_bug {
 
             push @changes, "[bug updated]";
         } else {
+            # We did not find a usable (non-archived) card referencing this bug, so open a new one.
+            $log->warn("Bug $bug->{id} whiteboard << $whiteboard >> references an unknown (or archived) card, creating a new card");
+
             $card = create_card($bug);
 
             if ( not $card ) {
@@ -649,6 +657,8 @@ sub sync_bug {
     $card = $new_card;
 
     my $cardid = $card->{taskid};
+
+    #$log->debug("Syncing card $card->{taskid} extlink << $card->{extlink} >> with bug $bug->{id} whiteboard << $bug->{whiteboard} >>") if $config->verbose;
 
     push @changes, sync_card( $card, $bug );
 
