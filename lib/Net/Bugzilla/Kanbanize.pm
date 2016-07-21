@@ -1060,6 +1060,8 @@ sub update_card_extlink {
 
     $req->content( encode_json($data) );
 
+    $log->debug("Updating card $taskid extlink to << $extlink >>") if $config->verbose;
+
     my $res = $ua->request($req);
 
     if ( !$res->is_success ) {
@@ -1228,6 +1230,8 @@ sub update_card_summary {
 
     $req->content( encode_json($data) );
 
+    $log->debug("Updating card $taskid summary to << $bug_summary >>") if $config->verbose;
+
     my $res = $ua->request($req);
 
     if ( !$res->is_success ) {
@@ -1255,6 +1259,8 @@ sub update_card_assigned {
       );
 
     $req->content("[]");
+
+    $log->debug("Updating card $card->{taskid} assignee to << $assignee >>") if $config->verbose;
 
     my $res = $ua->request($req);
 
@@ -1305,6 +1311,8 @@ sub update_whiteboard {
     $whiteboard =~ s/\s+$//;
 
     $req->content("whiteboard=$whiteboard&token=$BUGZILLA_TOKEN");
+
+    $log->debug("Updating whiteboard for bug $bugid to << $whiteboard >>") if $config->verbose;
 
     my $res = $ua->request($req);
 
