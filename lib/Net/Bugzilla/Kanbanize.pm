@@ -592,6 +592,10 @@ sub sync_bug {
         # - the bug must not be returned by the watched components search
         # - the bug must not have a cc: of the kanban watch user.
         #
+        if (defined($whiteboard) && length($whiteboard) > 0) {
+            $log->debug("Bug $bug->{id} whiteboard << $whiteboard >> did not resolve to a card.") if $config->verbose;
+        }
+
         if ($bug->{source} eq 'card') {
             # If all three of these conditions are true, then we assume the bug is not meant
             # to be watched in Kanban, and complete all open cards that reference it.
@@ -615,6 +619,7 @@ sub sync_bug {
 
         my $found_cardid = find_card_for_bugid($bug->{id});
         if ( defined $found_cardid ) {
+            # We found a usable (non-archived) card referencing this bug, so reuse it.
             $card = retrieve_card($found_cardid, $bug->{id});
 
             $log->warn("Bug $bug->{id} already has a card $found_cardid, updating whiteboard");
@@ -623,6 +628,9 @@ sub sync_bug {
 
             push @changes, "[bug updated]";
         } else {
+            # We did not find a usable (non-archived) card referencing this bug, so open a new one.
+            $log->warn("Bug $bug->{id} whiteboard << $whiteboard >> references an unknown (or archived) card, creating a new card");
+
             $card = create_card($bug);
 
             if ( not $card ) {
@@ -648,9 +656,47 @@ sub sync_bug {
 
     $card = $new_card;
 
-    my $cardid = $card->{taskid};
+    # Check the card extlink, if one is present, and make sure that it references the correct bug.
+    my($referenced_bug) = ($card->{extlink} =~ /show_bug.cgi.*id=(\d+)$/);
+    if (defined($referenced_bug) && $referenced_bug ne $bug->{id}) {
+        $log->warn("Bug $bug->{id} references card $card->{taskid} which references bug $referenced_bug, assigning bug $bug->{id} a new card.");
 
-    push @changes, sync_card( $card, $bug );
+        my $found_cardid = find_card_for_bugid($bug->{id});
+        if ( defined $found_cardid ) {
+            # We found a usable (non-archived) card referencing this bug, so reuse it.
+            $card = retrieve_card($found_cardid, $bug->{id});
+
+            $log->warn("Bug $bug->{id} already has a card $found_cardid, updating whiteboard");
+
+            update_whiteboard($bug->{id}, $found_cardid, $whiteboard);
+
+            push @changes, "[bug updated]";
+        } else {
+            # We did not find a usable (non-archived) card referencing this bug, so open a new one.
+            $log->warn("Bug $bug->{id} whiteboard << $whiteboard >> references an unknown (or archived) card, creating a new card");
+
+            $card = create_card($bug);
+
+            if ( not $card ) {
+                $log->warn("Failed to create card for bug $bug->{id}");
+                return;
+            }
+
+            update_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
+
+            push @changes, "[card created]";
+        }
+    }
+
+    # Assuming we didn't just create a new card, we need to sync the existing card to match the bug.
+    if (@changes > 0 && $changes[-1] !~ /card created/) {
+
+        #$log->debug("Syncing card $card->{taskid} extlink << $card->{extlink} >> with bug $bug->{id} whiteboard << $bug->{whiteboard} >>") if $config->verbose;
+
+        push @changes, sync_card( $card, $bug );
+    }
+
+    my $cardid = $card->{taskid};
 
     if ( $config->verbose ) {
         $log->debug(sprintf "[%4d/%4d] Card %4d - Bug %8d - [%s] %s ** %s **",
@@ -1060,6 +1106,8 @@ sub update_card_extlink {
 
     $req->content( encode_json($data) );
 
+    $log->debug("Updating card $taskid extlink to << $extlink >>") if $config->verbose;
+
     my $res = $ua->request($req);
 
     if ( !$res->is_success ) {
@@ -1228,6 +1276,8 @@ sub update_card_summary {
 
     $req->content( encode_json($data) );
 
+    $log->debug("Updating card $taskid summary to << $bug_summary >>") if $config->verbose;
+
     my $res = $ua->request($req);
 
     if ( !$res->is_success ) {
@@ -1255,6 +1305,8 @@ sub update_card_assigned {
       );
 
     $req->content("[]");
+
+    $log->debug("Updating card $card->{taskid} assignee to << $assignee >>") if $config->verbose;
 
     my $res = $ua->request($req);
 
@@ -1305,6 +1357,8 @@ sub update_whiteboard {
     $whiteboard =~ s/\s+$//;
 
     $req->content("whiteboard=$whiteboard&token=$BUGZILLA_TOKEN");
+
+    $log->debug("Updating whiteboard for bug $bugid to << $whiteboard >>") if $config->verbose;
 
     my $res = $ua->request($req);
 
