@@ -689,7 +689,7 @@ sub sync_bug {
     }
 
     # Assuming we didn't just create a new card, we need to sync the existing card to match the bug.
-    if (@changes > 0 && $changes[-1] !~ /card created/) {
+    unless (@changes > 0 && $changes[-1] =~ /card created/) {
 
         #$log->debug("Syncing card $card->{taskid} extlink << $card->{extlink} >> with bug $bug->{id} whiteboard << $bug->{whiteboard} >>") if $config->verbose;
 
