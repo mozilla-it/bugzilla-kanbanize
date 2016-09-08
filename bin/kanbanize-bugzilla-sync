@@ -19,6 +19,7 @@ my $config = AppConfig->new(
     "kanbanize_apikey=s",
     "kanbanize_boardid=i",
     "kanbanize_incoming=s",
+    "kanbanize_priority=s",
     "bugzilla_token=s",
     "bugzilla_id=s",
     "component=s@",
