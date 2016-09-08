@@ -1405,9 +1405,9 @@ sub create_card {
     }
 
     my $data = {
-        'title'   => api_encode_title("$bug->{id} - $bug->{summary}"),
-        'extlink' => "https://bugzilla.mozilla.org/show_bug.cgi?id=$bug->{id}",
-        'boardid' => $BOARD_ID,
+        'title'    => api_encode_title("$bug->{id} - $bug->{summary}"),
+        'extlink'  => "https://bugzilla.mozilla.org/show_bug.cgi?id=$bug->{id}",
+        'boardid'  => $BOARD_ID,
         'priority' => $KANBANIZE_PRIORITY,
     };
 
