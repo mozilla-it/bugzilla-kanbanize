@@ -54,6 +54,7 @@ my $APIKEY;
 my $BOARD_ID;
 my $BUGZILLA_TOKEN;
 my $KANBANIZE_INCOMING;
+my $KANBANIZE_PRIORITY;
 my $WHITEBOARD_TAG;
 my @COMPONENTS;
 my @PRODUCTS;
@@ -81,6 +82,7 @@ sub run {
       or die "Please configure a bugzilla_token";
 
     $KANBANIZE_INCOMING = $config->kanbanize_incoming;
+    $KANBANIZE_PRIORITY = $config->kanbanize_priority || "Average";
 
     $WHITEBOARD_TAG = $config->tag || die "Missing whiteboard tag";
 
@@ -1406,6 +1408,7 @@ sub create_card {
         'title'   => api_encode_title("$bug->{id} - $bug->{summary}"),
         'extlink' => "https://bugzilla.mozilla.org/show_bug.cgi?id=$bug->{id}",
         'boardid' => $BOARD_ID,
+        'priority' => $KANBANIZE_PRIORITY,
     };
 
     my $req =
