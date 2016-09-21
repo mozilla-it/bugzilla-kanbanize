@@ -223,8 +223,14 @@ sub find_card_for_bugid {
                 # Record the oldest archived card we find, but keep searching.
                 $found_archived ||= $card;
             } else {
-                # We found a non-archived card. Return it, since that's great.
-                return $cardid;
+                load_card_history($card);
+                if (eval { $card->{historydetails}[0]{historyevent} eq 'Task archived' }) {
+                    # This is a permanently-archived card. Record it if it's the oldest archived card.
+                    $found_archived ||= $card;
+                } else {
+                    # We found a non-archived card. Return it, since that's great.
+                    return $cardid;
+                }
             }
         }
     }
@@ -978,7 +984,9 @@ sub resolve_bug {
 sub reopen_card {
     my($card, $bug) = @_;
 
-    if ($card->{columnname} eq 'Done') {
+    load_card_history($card);
+
+    if ($card->{columnname} eq 'Done' && not eval { $card->{historydetails}[0]{historyevent} eq 'Task archived' }) {
         move_card( $card, $KANBANIZE_INCOMING );
 
         my $change = "[reopened card $card->{taskid} bug $bug->{id}]";
