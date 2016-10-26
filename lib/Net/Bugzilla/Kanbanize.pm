@@ -207,6 +207,24 @@ sub find_mislinked_bugs {
     }
 }
 
+sub is_archived_card {
+    my($card, $check_history) = @_;
+
+    if ($card->{columnname} eq 'Archive') {
+        # This is a temporarily-archived card.
+        return 1;
+    } elsif (defined($check_history) && $check_history) {
+        # Loading the card history takes an extra API call.
+        load_card_history($card);
+        if (eval { $card->{historydetails}[0]{historyevent} eq 'Task archived' }) {
+            # This is a permanently-archived card.
+            return 1;
+        }
+    }
+    # This is NOT an archived card, to the best of our knowledge.
+    return 0;
+}
+
 sub find_card_for_bugid {
     my($bugid, $skip_archived) = @_;
 
@@ -219,18 +237,13 @@ sub find_card_for_bugid {
         my $card = $all_cards->{$cardid};
         my $extlink = $card->{extlink};
         if (defined($extlink) && $extlink =~ /show_bug.cgi.*id=$bugid$/) {
-            if ($card->{columnname} eq 'Archive') {
+            # See if the card is archived, loading the history if necessary.
+            if (is_archived_card($card, 1)) {
                 # Record the oldest archived card we find, but keep searching.
                 $found_archived ||= $card;
             } else {
-                load_card_history($card);
-                if (eval { $card->{historydetails}[0]{historyevent} eq 'Task archived' }) {
-                    # This is a permanently-archived card. Record it if it's the oldest archived card.
-                    $found_archived ||= $card;
-                } else {
-                    # We found a non-archived card. Return it, since that's great.
-                    return $cardid;
-                }
+                # We found a non-archived card. Return it, since that's great.
+                return $cardid;
             }
         }
     }
