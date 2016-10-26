@@ -541,7 +541,7 @@ sub get_bugs_from_all_cards {
 
     my $req =
       HTTP::Request->new( POST =>
-"http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/get_all_tasks/boardid/$BOARD_ID/format/json"
+"https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/get_all_tasks/boardid/$BOARD_ID/format/json"
       );
 
     $req->header( "Content-Length" => "0" );
@@ -733,7 +733,7 @@ sub retrieve_card {
 
     my $req =
       HTTP::Request->new( POST =>
-"http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/get_task_details/boardid/$BOARD_ID/taskid/$card_id/format/json"
+"https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/get_task_details/boardid/$BOARD_ID/taskid/$card_id/format/json"
       );
 
     $req->content( encode_json($params) );
@@ -1042,7 +1042,7 @@ sub unblock_card {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/block_task/format/json"
+          "https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/block_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -1079,7 +1079,7 @@ sub complete_card {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/move_task/format/json"
+          "https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/move_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -1111,7 +1111,7 @@ sub update_card_extlink {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json"
+          "https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -1281,7 +1281,7 @@ sub update_card_summary {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json"
+          "https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -1311,7 +1311,7 @@ sub update_card_assigned {
 
     my $req =
       HTTP::Request->new( POST =>
-"http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json/boardid/$BOARD_ID/taskid/$taskid/assignee/$assignee"
+"https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json/boardid/$BOARD_ID/taskid/$taskid/assignee/$assignee"
       );
 
     $req->content("[]");
@@ -1421,7 +1421,7 @@ sub create_card {
 
     my $req =
       HTTP::Request->new( POST =>
-"http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/create_new_task/format/json"
+"https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/create_new_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -1460,7 +1460,7 @@ sub move_card {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/move_task/format/json"
+          "https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/move_task/format/json"
       );
 
     $req->content( encode_json($data) );
