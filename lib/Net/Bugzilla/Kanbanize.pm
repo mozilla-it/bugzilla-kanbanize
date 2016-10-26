@@ -707,6 +707,20 @@ sub sync_bug {
 
             push @changes, "[card created]";
         }
+    } elsif (is_archived_card($card)) {
+        # This bug references an archived card, so open a new card.
+        $log->warn("Bug $bug->{id} whiteboard << $whiteboard >> references an archived card, creating a new card");
+
+        $card = create_card($bug);
+
+        if ( not $card ) {
+            $log->warn("Failed to create card for bug $bug->{id}");
+            return;
+        }
+
+        update_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
+
+        push @changes, "[card created]";
     }
 
     # Assuming we didn't just create a new card, we need to sync the existing card to match the bug.
