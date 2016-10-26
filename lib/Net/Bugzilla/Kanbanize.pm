@@ -216,7 +216,7 @@ sub is_archived_card {
     } elsif (defined($check_history) && $check_history) {
         # Loading the card history takes an extra API call.
         load_card_history($card);
-        if (eval { $card->{historydetails}[0]{historyevent} eq 'Task archived' }) {
+        if (eval { no warnings 'uninitialized'; $card->{historydetails}[0]{historyevent} eq 'Task archived' }) {
             # This is a permanently-archived card.
             return 1;
         }
@@ -386,6 +386,7 @@ sub get_card_history_latest {
     my @timestamps = ();
 
     for my $change (@{ $history }) {
+        next unless exists $change->{'historyevent'};
         next unless $change->{'historyevent'} =~ /$field/i;
         if (defined($details)) {
             next unless $change->{'details'} =~ /$details/;
