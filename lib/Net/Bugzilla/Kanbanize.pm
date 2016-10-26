@@ -207,6 +207,24 @@ sub find_mislinked_bugs {
     }
 }
 
+sub is_archived_card {
+    my($card, $check_history) = @_;
+
+    if ($card->{columnname} eq 'Archive') {
+        # This is a temporarily-archived card.
+        return 1;
+    } elsif (defined($check_history) && $check_history) {
+        # Loading the card history takes an extra API call.
+        load_card_history($card);
+        if (eval { no warnings 'uninitialized'; $card->{historydetails}[0]{historyevent} eq 'Task archived' }) {
+            # This is a permanently-archived card.
+            return 1;
+        }
+    }
+    # This is NOT an archived card, to the best of our knowledge.
+    return 0;
+}
+
 sub find_card_for_bugid {
     my($bugid, $skip_archived) = @_;
 
@@ -219,18 +237,13 @@ sub find_card_for_bugid {
         my $card = $all_cards->{$cardid};
         my $extlink = $card->{extlink};
         if (defined($extlink) && $extlink =~ /show_bug.cgi.*id=$bugid$/) {
-            if ($card->{columnname} eq 'Archive') {
+            # See if the card is archived, loading the history if necessary.
+            if (is_archived_card($card, 1)) {
                 # Record the oldest archived card we find, but keep searching.
                 $found_archived ||= $card;
             } else {
-                load_card_history($card);
-                if (eval { $card->{historydetails}[0]{historyevent} eq 'Task archived' }) {
-                    # This is a permanently-archived card. Record it if it's the oldest archived card.
-                    $found_archived ||= $card;
-                } else {
-                    # We found a non-archived card. Return it, since that's great.
-                    return $cardid;
-                }
+                # We found a non-archived card. Return it, since that's great.
+                return $cardid;
             }
         }
     }
@@ -373,6 +386,7 @@ sub get_card_history_latest {
     my @timestamps = ();
 
     for my $change (@{ $history }) {
+        next unless exists $change->{'historyevent'};
         next unless $change->{'historyevent'} =~ /$field/i;
         if (defined($details)) {
             next unless $change->{'details'} =~ /$details/;
@@ -541,7 +555,7 @@ sub get_bugs_from_all_cards {
 
     my $req =
       HTTP::Request->new( POST =>
-"http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/get_all_tasks/boardid/$BOARD_ID/format/json"
+"https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/get_all_tasks/boardid/$BOARD_ID/format/json"
       );
 
     $req->header( "Content-Length" => "0" );
@@ -694,6 +708,20 @@ sub sync_bug {
 
             push @changes, "[card created]";
         }
+    } elsif (is_archived_card($card)) {
+        # This bug references an archived card, so open a new card.
+        $log->warn("Bug $bug->{id} whiteboard << $whiteboard >> references an archived card, creating a new card");
+
+        $card = create_card($bug);
+
+        if ( not $card ) {
+            $log->warn("Failed to create card for bug $bug->{id}");
+            return;
+        }
+
+        update_whiteboard( $bug->{id}, $card->{taskid}, $whiteboard );
+
+        push @changes, "[card created]";
     }
 
     # Assuming we didn't just create a new card, we need to sync the existing card to match the bug.
@@ -733,7 +761,7 @@ sub retrieve_card {
 
     my $req =
       HTTP::Request->new( POST =>
-"http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/get_task_details/boardid/$BOARD_ID/taskid/$card_id/format/json"
+"https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/get_task_details/boardid/$BOARD_ID/taskid/$card_id/format/json"
       );
 
     $req->content( encode_json($params) );
@@ -1042,7 +1070,7 @@ sub unblock_card {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/block_task/format/json"
+          "https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/block_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -1079,7 +1107,7 @@ sub complete_card {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/move_task/format/json"
+          "https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/move_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -1111,7 +1139,7 @@ sub update_card_extlink {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json"
+          "https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -1281,7 +1309,7 @@ sub update_card_summary {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json"
+          "https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -1311,7 +1339,7 @@ sub update_card_assigned {
 
     my $req =
       HTTP::Request->new( POST =>
-"http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json/boardid/$BOARD_ID/taskid/$taskid/assignee/$assignee"
+"https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/edit_task/format/json/boardid/$BOARD_ID/taskid/$taskid/assignee/$assignee"
       );
 
     $req->content("[]");
@@ -1421,7 +1449,7 @@ sub create_card {
 
     my $req =
       HTTP::Request->new( POST =>
-"http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/create_new_task/format/json"
+"https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/create_new_task/format/json"
       );
 
     $req->content( encode_json($data) );
@@ -1460,7 +1488,7 @@ sub move_card {
 
     my $req =
       HTTP::Request->new( POST =>
-          "http://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/move_task/format/json"
+          "https://$WHITEBOARD_TAG.kanbanize.com/index.php/api/kanbanize/move_task/format/json"
       );
 
     $req->content( encode_json($data) );
