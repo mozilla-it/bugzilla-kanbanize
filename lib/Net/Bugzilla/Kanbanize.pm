@@ -679,8 +679,10 @@ sub sync_bug {
     $card = $new_card;
 
     # Check the card extlink, if one is present, and make sure that it references the correct bug.
-    my($referenced_bug) = ($card->{extlink} =~ /show_bug.cgi.*id=(\d+)$/);
-    if (defined($referenced_bug) && $referenced_bug ne $bug->{id}) {
+    my($referenced_bug) = ($card->{extlink} =~ /show_bug.cgi.*[&?]id=(\d+)/);
+    if (!defined($referenced_bug)) {
+        $log->warn("Bug $bug->{id} references card $card->{taskid}, but the card does not point back to a properly formatted bug.");
+    } elsif ($referenced_bug ne $bug->{id}) {
         $log->warn("Bug $bug->{id} references card $card->{taskid} which references bug $referenced_bug, assigning bug $bug->{id} a new card.");
 
         my $found_cardid = find_card_for_bugid($bug->{id});
